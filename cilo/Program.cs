@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace cilo
@@ -17,6 +18,8 @@ namespace cilo
 
         static int Main(string[] args)
         {
+            //Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
             try
             {
                 var console = new EditorConsole();
@@ -40,17 +43,59 @@ namespace cilo
 
     class EditorConsole
     {
+        const int STD_OUTPUT_HANDLE = -11;
+        const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+        const uint DISABLE_NEWLINE_AUTO_RETURN = 0x0008;
+
+        [DllImport("kernel32.dll")]
+        static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+        [DllImport("kernel32.dll")]
+        static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern IntPtr GetStdHandle(int nStdHandle);
+
+        [DllImport("kernel32.dll")]
+        static extern uint GetLastError();
 
         public EditorConsole()
         {
             this.CheckConsoleRequirements();
-            Console.TreatControlCAsInput = true;
+            this.SetupConsoleMode();
         }
 
-        private void CheckConsoleRequirements()
+        void CheckConsoleRequirements()
         {
             if (Console.IsInputRedirected) { throw new EditorException("Console input is redirected."); }
             if (Console.IsOutputRedirected) { throw new EditorException("Console output is redirected."); }
+        }
+
+        void SetupConsoleMode()
+        {
+            // To treat Ctrl+C with ReadKey().
+            Console.TreatControlCAsInput = true;
+
+            // (For Windows) Enable escape cequences.
+            try
+            {
+                var iStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                if (!GetConsoleMode(iStdOut, out var consoleMode))
+                {
+                    throw new EditorException("Failed to get output console mode.");
+                }
+
+                consoleMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+                if (!SetConsoleMode(iStdOut, consoleMode))
+                {
+                    throw new EditorException($"Failed to set output console mode, error code: {GetLastError()}");
+                }
+            }
+            catch(DllNotFoundException)
+            {
+                // Pass because this os may not be Windows. (Like Linux or Mac)
+                // Maybe this OS can use escape sequences by default.
+            }
         }
 
         public int RowsCount => Console.WindowHeight;
