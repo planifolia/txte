@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -22,8 +23,12 @@ namespace cilo
 
             try
             {
+                var document =
+                    (args.Length >= 1) ? Document.Open(args[0])
+                    : new Document();
                 var console = new EditorConsole();
                 var editor = new Editor(console);
+                editor.SetDocument(document);
                 editor.Run();
                 return 0;
             }
@@ -166,16 +171,52 @@ namespace cilo
         public override string ToString() => this.buffer.ToString();
     }
 
+    class Document
+    {
+        public List<string> Rows { get; }
+        public int RowCount { get; set; }
+
+        public Document()
+        {
+            this.Rows = new List<string> { };
+            this.RowCount = 0;
+        }
+
+        public static Document Open(string path)
+        {
+            var doc = new Document();
+            using (var reader = new StreamReader(path, Encoding.UTF8))
+            {
+                while (reader.ReadLine() is var line && line != null)
+                {
+                    doc.Rows.Add(line);
+                    doc.RowCount++;
+                }
+
+            }
+
+            return doc;
+        }
+    }
+
     class Editor
     {
         public static string Version = "0.0.1";
+
         readonly EditorConsole console;
+
         Point cursor;
+        Document docment;
 
         public Editor(EditorConsole console)
         {
             this.console = console;
             this.cursor = new Point(0, 0);
+        }
+
+        public void SetDocument(Document document)
+        {
+            this.docment = document;
         }
 
         public void Run()
@@ -193,6 +234,7 @@ namespace cilo
                 }
             }
         }
+
 
         public void RefreshScreen()
         {
@@ -212,24 +254,35 @@ namespace cilo
         {
             for (int y = 0; y < this.console.RowsCount; y++)
             {
-                if (y == this.console.RowsCount / 3)
+                if (y >= this.docment.RowCount)
                 {
-                    var welcome = $"Cilo editor -- version {Version}";
-                    var welcomeLength = Math.Min(welcome.Length, this.console.ColumnsCount);
-                    var padding = (this.console.ColumnsCount - welcomeLength) / 2;
-                    if (padding > 0) {
+                    if (this.docment.RowCount == 0 && y == this.console.RowsCount / 3)
+                    {
+                        var welcome = $"Cilo editor -- version {Version}";
+                        var welcomeLength = Math.Min(welcome.Length, this.console.ColumnsCount);
+                        var padding = (this.console.ColumnsCount - welcomeLength) / 2;
+                        if (padding > 0)
+                        {
+                            buffer.Append("~");
+                        }
+                        for (int i = 1; i < padding; i++)
+                        {
+                            buffer.Append(" ");
+                        }
+                        buffer.Append(welcome.Substring(0, welcomeLength));
+                    }
+                    else
+                    {
                         buffer.Append("~");
                     }
-                    for (int i = 1; i < padding; i++)
-                    {
-                        buffer.Append(" ");
-                    }
-                    buffer.Append(welcome.Substring(0, welcomeLength));
                 }
                 else
                 {
-                    buffer.Append("~");
+                    var docText = this.docment.Rows[y];
+                    var docLength = Math.Min(docText.Length, this.console.ColumnsCount);
+                    buffer.Append(docText.Substring(0, docLength));
                 }
+                
                 buffer.AppendClearLineSequence();
                 if (y < this.console.RowsCount - 1)
                 {
