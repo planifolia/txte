@@ -4,6 +4,6 @@
 
 ### dotnet command and dll
 
-'''sh
+```sh
 dotnet cilo.dll "path/to/text.file"
-'''
+```
