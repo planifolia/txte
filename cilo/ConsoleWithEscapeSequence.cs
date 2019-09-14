@@ -5,7 +5,7 @@ using System.Text;
 
 namespace cilo
 {
-    class ConsoleWithEscapeSequence : IEditorConsole
+    class ConsoleWithEscapeSequence : IConsole
     {
         const int STD_OUTPUT_HANDLE = -11;
         const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
@@ -28,6 +28,11 @@ namespace cilo
             this.CheckConsoleRequirements();
             this.SetupConsoleMode();
         }
+
+        public int Height => Console.WindowHeight;
+        public int EditorHeight => this.Height - 2 /* status + message */;
+        public int Width => Console.BufferWidth;
+        public Size Size => new Size(this.Width, this.Height);
 
         void CheckConsoleRequirements()
         {
@@ -62,20 +67,7 @@ namespace cilo
             }
         }
 
-        public int Height => Console.WindowHeight;
-        public int EditorHeight => this.Height - 2 /* status + message */;
-        public int Width => Console.BufferWidth;
-        public Size Size => new Size(this.Width, this.Height);
-
-        public ConsoleKeyInfo ReadKey()
-        {
-            return Console.ReadKey(true);
-        }
-
-        public void Write(string value)
-        {
-            Console.Write(value);
-        }
+        public ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
 
         public void Clear()
         {
@@ -84,33 +76,30 @@ namespace cilo
         }
 
         public void RefreshScreen(
-            Action<IScreenBuffer> drawEditorRows,
-            Action<IScreenBuffer> drawSatusBar,
-            Action<IScreenBuffer> drawMessageBar,
+            Action<IScreen> drawEditorRows,
+            Action<IScreen> drawSatusBar,
+            Action<IScreen> drawMessageBar,
             Point cursor)
         {
             var buffer = new Buffer(this.Size);
 
-            buffer.AppendHideCursor();
-            buffer.AppendSetCursorPositionZero();
+            buffer.HideCursor();
+            buffer.SetCursorPositionZero();
             drawEditorRows(buffer);
-            buffer.AppendReverseColor();
+            buffer.ReverseColor();
             drawSatusBar(buffer);
-            buffer.AppendResetColor();
+            buffer.ResetColor();
             drawMessageBar(buffer);
-            buffer.AppendSetCursorPosition(cursor);
-            buffer.AppendShowCursor();
+            buffer.SetCursorPosition(cursor);
+            buffer.ShowCursor();
 
             this.Write(buffer.ToString());
         }
 
-        class Buffer : IScreenBuffer
+        void Write(string value) => Console.Write(value);
+
+        class Buffer : IScreen
         {
-            readonly StringBuilder buffer;
-            readonly Size size;
-
-            int rowCount;
-
             public Buffer(Size size)
             {
                 this.buffer = new StringBuilder();
@@ -119,10 +108,17 @@ namespace cilo
                 this.rowCount = 0;
             }
 
+            readonly StringBuilder buffer;
+            readonly Size size;
+
+            int rowCount;
+
+            public override string ToString() => this.buffer.ToString();
+
             public void AppendRow(string value)
             {
                 this.buffer.Append(value);
-                this.AppendClearLine();
+                this.ClearLine();
                 if (this.rowCount < this.size.Height - 1)
                 {
                     this.AppendNewLine();
@@ -130,50 +126,21 @@ namespace cilo
                 this.rowCount++;
             }
 
-            void AppendClearLine()
-            {
-                this.buffer.Append("\x1b[K");
-            }
+            internal void SetCursorPositionZero() => this.buffer.Append("\x1b[H");
+            // ... Console.SetCursorPosition(0, 0);
+            internal void SetCursorPosition(Point cursor) => this.SetCursorPosition(cursor.X, cursor.Y);
+            internal void SetCursorPosition(int x, int y) => this.buffer.Append($"\x1b[{y + 1};{x + 1}H");
+            // ... Console.SetCursorPosition(cursor.X, cursor.Y);
 
-            void AppendNewLine()
-            {
-                this.buffer.Append("\r\n");
-            }
+            internal void HideCursor() => this.buffer.Append("\x1b[?25l");
+            internal void ShowCursor() => this.buffer.Append("\x1b[?25h");
 
-            public void AppendSetCursorPositionZero()
-            {
-                this.buffer.Append("\x1b[H");
-                // Console.SetCursorPosition(0, 0);
-            }
-            public void AppendSetCursorPosition(Point cursor)
-            {
-                this.AppendSetCursorPosition(cursor.X, cursor.Y);
-            }
-            public void AppendSetCursorPosition(int x, int y)
-            {
-                this.buffer.Append($"\x1b[{y + 1};{x + 1}H");
-                // Console.SetCursorPosition(cursor.X, cursor.Y);
-            }
+            internal void ReverseColor() => this.buffer.Append("\x1b[7m");
+            internal void ResetColor() => this.buffer.Append("\x1b[m");
 
-            public void AppendHideCursor()
-            {
-                this.buffer.Append("\x1b[?25l");
-            }
-            public void AppendShowCursor()
-            {
-                this.buffer.Append("\x1b[?25h");
-            }
+            void ClearLine() => this.buffer.Append("\x1b[K");
 
-            public void AppendReverseColor()
-            {
-                this.buffer.Append("\x1b[7m");
-            }
-            public void AppendResetColor()
-            {
-                this.buffer.Append("\x1b[m");
-            }
-
-            public override string ToString() => this.buffer.ToString();
+            void AppendNewLine() => this.buffer.Append("\r\n");
         }
     }
 }

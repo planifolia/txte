@@ -20,7 +20,7 @@ namespace cilo
         Quit,
     }
 
-    interface IEditorConsole
+    interface IConsole
     {
         int Height { get; }
         int EditorHeight { get; }
@@ -30,12 +30,12 @@ namespace cilo
         ConsoleKeyInfo ReadKey();
         void Clear();
         void RefreshScreen(
-            Action<IScreenBuffer> drawEditorRows,
-            Action<IScreenBuffer> drawStatusBar,
-            Action<IScreenBuffer> drawMessageBar,
+            Action<IScreen> drawEditorRows,
+            Action<IScreen> drawStatusBar,
+            Action<IScreen> drawMessageBar,
             Point cursor);
     }
-    interface IScreenBuffer
+    interface IScreen
     {
         void AppendRow(string value);
     }
@@ -92,6 +92,31 @@ namespace cilo
 
     class Document
     {
+        public static Document Open(string path)
+        {
+            var doc = new Document
+            {
+                Path = path
+            };
+            using (var reader = new StreamReader(path, Encoding.UTF8))
+            {
+                while (reader.ReadLine() is var line && line != null)
+                {
+                    doc.Rows.Add(new Row(line));
+                }
+            }
+
+            return doc;
+        }
+
+        public Document()
+        {
+            this.Path = null;
+            this.Rows = new List<Row> { };
+            this.valuePosition = new Point(0, 0);
+            this.offset = new Point(0, 0);
+        }
+
         public string Path { get; private set; }
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
@@ -103,29 +128,6 @@ namespace cilo
         int renderPositionX;
         Point valuePosition;
         Point offset;
-
-        public Document()
-        {
-            this.Path = null;
-            this.Rows = new List<Row> { };
-            this.valuePosition = new Point(0, 0);
-            this.offset = new Point(0, 0);
-        }
-
-        public static Document Open(string path)
-        {
-            var doc = new Document();
-            doc.Path = path;
-            using (var reader = new StreamReader(path, Encoding.UTF8))
-            {
-                while (reader.ReadLine() is var line && line != null)
-                {
-                    doc.Rows.Add(new Row(line));
-                }
-            }
-
-            return doc;
-        }
 
         public void MoveLeft()
         {
@@ -243,7 +245,7 @@ namespace cilo
             }
         }
 
-        public void UpdateOffset(IEditorConsole console)
+        public void UpdateOffset(IConsole console)
         {
             this.renderPositionX = 0;
             if (this.valuePosition.Y < this.Rows.Count)
@@ -270,9 +272,9 @@ namespace cilo
         }
     }
 
-    class StatusMessage
+    class TemporaryMessage
     {
-        public StatusMessage(string value, DateTime time)
+        public TemporaryMessage(string value, DateTime time)
         {
             this.Value = value;
             this.Time = time;
@@ -286,16 +288,16 @@ namespace cilo
     {
         public static string Version = "0.0.1";
 
-        readonly IEditorConsole console;
-
-        Document document;
-        StatusMessage statusMessage;
-
-        public Editor(IEditorConsole console)
+        public Editor(IConsole console)
         {
             this.console = console;
             this.statusMessage = null;
         }
+
+        readonly IConsole console;
+
+        Document document;
+        TemporaryMessage statusMessage;
 
         public void SetDocument(Document document)
         {
@@ -318,8 +320,6 @@ namespace cilo
             }
         }
 
-
-
         void RefreshScreen()
         {
             this.document.UpdateOffset(this.console);
@@ -330,7 +330,7 @@ namespace cilo
                 this.document.Cursor);
         }
 
-        void DrawEditorRows(IScreenBuffer buffer)
+        void DrawEditorRows(IScreen buffer)
         {
             for (int y = 0; y < this.console.EditorHeight; y++)
             {
@@ -368,7 +368,7 @@ namespace cilo
                 }
             }
         }
-        void DrawSatausBar(IScreenBuffer buffer)
+        void DrawSatausBar(IScreen buffer)
         {
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
             var documentRowCount = this.document.Rows.Count;
@@ -378,7 +378,7 @@ namespace cilo
 
             buffer.AppendRow(fileInfo + new string(' ', padding) + positionInfo);
         }
-        void DrawMessageBar(IScreenBuffer buffer)
+        void DrawMessageBar(IScreen buffer)
         {
             if (DateTime.Now - this.statusMessage.Time < TimeSpan.FromSeconds(5))
             {
@@ -394,7 +394,7 @@ namespace cilo
 
         public void SetStatusMessage(string value)
         {
-            this.statusMessage = new StatusMessage(value, DateTime.Now);
+            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
         }
 
         public EditorProcessingResults ProcessKeyPress(ConsoleKeyInfo key)
