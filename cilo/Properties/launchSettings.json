@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "cilo": {
+      "commandName": "Project",
+      "commandLineArgs": "Program.cs"
+    }
+  }
+}

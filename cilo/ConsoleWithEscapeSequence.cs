@@ -1,4 +1,6 @@
-﻿using System;
+﻿#if ESCAPE_SEQUENCE_ENHANCED || true
+
+using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -31,7 +33,7 @@ namespace cilo
 
         public int Height => Console.WindowHeight;
         public int EditorHeight => this.Height - 2 /* status + message */;
-        public int Width => Console.BufferWidth;
+        public int Width => Console.BufferWidth - 1;
         public Size Size => new Size(this.Width, this.Height);
 
         void CheckConsoleRequirements()
@@ -75,13 +77,15 @@ namespace cilo
             this.Write("\x1b[H"); // Console.SetCursorPosition(0, 0);
         }
 
+
         public void RefreshScreen(
+            EditorSetting setting,
             Action<IScreen> drawEditorRows,
             Action<IScreen> drawSatusBar,
             Action<IScreen> drawMessageBar,
             Point cursor)
         {
-            var buffer = new Buffer(this.Size);
+            var buffer = new Buffer(this, setting.IsFullWidthAmbiguous);
 
             buffer.HideCursor();
             buffer.SetCursorPositionZero();
@@ -100,16 +104,19 @@ namespace cilo
 
         class Buffer : IScreen
         {
-            public Buffer(Size size)
+            public Buffer(ConsoleWithEscapeSequence console, bool ambuguosIsfullWidth)
             {
                 this.buffer = new StringBuilder();
-                this.size = size;
+                this.console = console;
+                this.size = console.Size;
+                this.ambuguosIsfullWidth = ambuguosIsfullWidth;
 
                 this.rowCount = 0;
             }
-
             readonly StringBuilder buffer;
+            readonly ConsoleWithEscapeSequence console;
             readonly Size size;
+            readonly bool ambuguosIsfullWidth;
 
             int rowCount;
 
@@ -126,6 +133,25 @@ namespace cilo
                 this.rowCount++;
             }
 
+            public void AppendFragmentedRow(string value, bool startIsFragmented, bool endIsFragmented)
+            {
+                if (startIsFragmented) { this.AppendFragmentChar(']'); }
+                this.buffer.Append(value);
+                if (endIsFragmented) { this.AppendFragmentChar('['); }
+                this.ClearLine();
+                if (this.rowCount < this.size.Height - 1)
+                {
+                    this.AppendNewLine();
+                }
+                this.rowCount++;
+            }
+            public void AppendOuterRow(string value)
+            {
+                this.buffer.Append("\x1b[36m");
+                this.AppendRow(value);
+                this.ResetColor();
+            }
+
             internal void SetCursorPositionZero() => this.buffer.Append("\x1b[H");
             // ... Console.SetCursorPosition(0, 0);
             internal void SetCursorPosition(Point cursor) => this.SetCursorPosition(cursor.X, cursor.Y);
@@ -138,9 +164,17 @@ namespace cilo
             internal void ReverseColor() => this.buffer.Append("\x1b[7m");
             internal void ResetColor() => this.buffer.Append("\x1b[m");
 
+            void AppendFragmentChar(char fragment)
+            {
+                this.buffer.Append("\x1b[31m\x1b[47m");
+                this.buffer.Append(fragment);
+                this.ResetColor();
+            }
+
             void ClearLine() => this.buffer.Append("\x1b[K");
 
             void AppendNewLine() => this.buffer.Append("\r\n");
         }
     }
 }
+#endif

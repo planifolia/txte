@@ -8,9 +8,12 @@ namespace cilo
 {
     static class SpecialKeys
     {
-        public static readonly ConsoleKeyInfo CtrlBreak = new ConsoleKeyInfo((char)0x00, ConsoleKey.Pause, false, false, true);
-        public static readonly ConsoleKeyInfo CtrlC = new ConsoleKeyInfo((char)0x03, ConsoleKey.C, false, false, true);
-        public static readonly ConsoleKeyInfo CtrlQ = new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, false, true);
+        public static readonly ConsoleKeyInfo CtrlBreak = 
+            new ConsoleKeyInfo((char)0x00, ConsoleKey.Pause, false, false, true);
+        public static readonly ConsoleKeyInfo CtrlC = 
+            new ConsoleKeyInfo((char)0x03, ConsoleKey.C, false, false, true);
+        public static readonly ConsoleKeyInfo CtrlQ = 
+            new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, false, true);
     }
 
 
@@ -30,6 +33,7 @@ namespace cilo
         ConsoleKeyInfo ReadKey();
         void Clear();
         void RefreshScreen(
+            EditorSetting setting,
             Action<IScreen> drawEditorRows,
             Action<IScreen> drawStatusBar,
             Action<IScreen> drawMessageBar,
@@ -38,6 +42,8 @@ namespace cilo
     interface IScreen
     {
         void AppendRow(string value);
+        void AppendFragmentedRow(string value, bool startIsFragmented, bool endIsFragmented);
+        void AppendOuterRow(string value);
     }
 
     class Row
@@ -45,14 +51,14 @@ namespace cilo
         public Row(string value)
         {
             this.Value = value;
-            this.UpdateRender(4);
         }
 
         public string Value { get; private set; }
         public string Render { get; private set; }
 
-        public void UpdateRender(int tabSize)
+        public void UpdateRender(EditorSetting setting)
         {
+            var tabSize = setting.TabSize;
             //int tabs = 0;
             //for (int i = 0; i < this.Value.Length; i++)
             //{
@@ -75,8 +81,10 @@ namespace cilo
             this.Render = renderBuilder.ToString();
         }
 
-        public int ValueXToRenderX(int valueX, int tabSize)
+        public int ValueXToRenderX(int valueX, EditorSetting setting)
         {
+            int tabSize = setting.TabSize;
+            bool ambiguousSetting = setting.IsFullWidthAmbiguous;
             int renderX = 0;
             for (int i = 0; i < valueX; i++)
             {
@@ -84,7 +92,7 @@ namespace cilo
                 {
                     renderX += (tabSize - 1) - (renderX % tabSize);
                 }
-                renderX++;
+                renderX += this.Value[i].GetEastAsianWidth(ambiguousSetting);
             }
             return renderX;
         }
@@ -92,7 +100,7 @@ namespace cilo
 
     class Document
     {
-        public static Document Open(string path)
+        public static Document Open(string path, EditorSetting setting)
         {
             var doc = new Document
             {
@@ -103,6 +111,10 @@ namespace cilo
                 while (reader.ReadLine() is var line && line != null)
                 {
                     doc.Rows.Add(new Row(line));
+                }
+                foreach(var row in doc.Rows)
+                {
+                    row.UpdateRender(setting);
                 }
             }
 
@@ -124,7 +136,6 @@ namespace cilo
         public Point ValuePosition => this.valuePosition;
         public Point Offset => this.offset;
 
-        Point renderPosition;
         int renderPositionX;
         Point valuePosition;
         Point offset;
@@ -245,12 +256,20 @@ namespace cilo
             }
         }
 
-        public void UpdateOffset(IConsole console)
+        public void UpdateOffset(IConsole console, EditorSetting setting)
         {
             this.renderPositionX = 0;
+            int overshoot = 0;
             if (this.valuePosition.Y < this.Rows.Count)
             {
-                this.renderPositionX = this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, 4);
+                this.renderPositionX = 
+                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, setting);
+                if (valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
+                {
+                    overshoot =
+                        this.Rows[this.valuePosition.Y].Value[this.valuePosition.X]
+                        .GetEastAsianWidth(setting.IsFullWidthAmbiguous) - 1;
+                }
             }
 
             if (this.valuePosition.Y < this.offset.Y)
@@ -267,7 +286,7 @@ namespace cilo
             }
             if (this.renderPositionX >= this.offset.X + console.Width)
             {
-                this.offset.X = this.renderPositionX - console.Width + 1;
+                this.offset.X = this.renderPositionX - console.Width + 1 + overshoot;
             }
         }
     }
@@ -284,20 +303,27 @@ namespace cilo
         public DateTime Time { get; }
     }
 
+    class EditorSetting
+    {
+        public bool IsFullWidthAmbiguous { get; set; } = true;
+        public int TabSize { get; set; } = 4;
+    }
+
     class Editor
     {
         public static string Version = "0.0.1";
 
-        public Editor(IConsole console)
+        public Editor(IConsole console, EditorSetting setting)
         {
             this.console = console;
-            this.statusMessage = null;
+            this.setting = setting;
         }
 
         readonly IConsole console;
 
         Document document;
         TemporaryMessage statusMessage;
+        EditorSetting setting;
 
         public void SetDocument(Document document)
         {
@@ -320,88 +346,113 @@ namespace cilo
             }
         }
 
+        public void SetStatusMessage(string value)
+        {
+            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
+        }
+
         void RefreshScreen()
         {
-            this.document.UpdateOffset(this.console);
+            this.document.UpdateOffset(this.console, this.setting);
             this.console.RefreshScreen(
+                this.setting,
                 this.DrawEditorRows,
                 this.DrawSatausBar,
                 this.DrawMessageBar,
                 this.document.Cursor);
         }
 
-        void DrawEditorRows(IScreen buffer)
+        void DrawEditorRows(IScreen screen)
         {
+            bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
             for (int y = 0; y < this.console.EditorHeight; y++)
             {
                 var docRow = y + this.document.Offset.Y;
                 if (docRow < this.document.Rows.Count)
                 {
-                    var docText = this.document.Rows[docRow].Render;
-                    var docLength = Math.Clamp(docText.Length - this.document.Offset.X, 0, this.console.Width);
-                    buffer.AppendRow(docLength > 0 ? docText.Substring(this.document.Offset.X, docLength) : "");
+                    DrawDocumentRow(screen, ambiguousSetting, docRow);
                 }
                 else
                 {
-                    if (this.document.Rows.Count == 0 && y == this.console.EditorHeight / 3)
-                    {
-                        var welcome = $"Cilo editor -- version {Version}";
-                        var welcomeLength = Math.Min(welcome.Length, this.console.Width);
-                        var padding = (this.console.Width - welcomeLength) / 2;
-                        var rowBuffer = new StringBuilder();
-                        if (padding > 0)
-                        {
-                            rowBuffer.Append("~");
-                        }
-                        for (int i = 1; i < padding; i++)
-                        {
-                            rowBuffer.Append(" ");
-                        }
-                        rowBuffer.Append(welcome.Substring(0, welcomeLength));
-
-                        buffer.AppendRow(rowBuffer.ToString());
-                    }
-                    else
-                    {
-                        buffer.AppendRow("~");
-                    }
+                    DrawOutofBounds(screen, y);
                 }
             }
         }
-        void DrawSatausBar(IScreen buffer)
+
+        void DrawDocumentRow(IScreen screen, bool ambiguousSetting, int docRow)
+        {
+            var docText = this.document.Rows[docRow].Render;
+            var docLength =
+                Math.Clamp(
+                    docText.GetConsoleLength(ambiguousSetting) - this.document.Offset.X,
+                    0, this.console.Width
+                );
+            if (docLength > 0)
+            {
+                var (render, startIsFragmented, endIsFragmented) =
+                    docText.SubConsoleString(this.document.Offset.X, docLength, ambiguousSetting);
+
+                screen.AppendFragmentedRow(render, startIsFragmented, endIsFragmented);
+            }
+            else
+            {
+                screen.AppendRow("");
+            }
+        }
+
+        void DrawOutofBounds(IScreen screen, int y)
+        {
+            if (this.document.Rows.Count == 0 && y == this.console.EditorHeight / 3)
+            {
+                var welcome = $"Cilo editor -- version {Version}";
+                var welcomeLength = Math.Min(welcome.Length, this.console.Width);
+                var padding = (this.console.Width - welcomeLength) / 2;
+                var rowBuffer = new StringBuilder();
+                if (padding > 0)
+                {
+                    rowBuffer.Append("~");
+                }
+                for (int i = 1; i < padding; i++)
+                {
+                    rowBuffer.Append(" ");
+                }
+                rowBuffer.Append(welcome.Substring(0, welcomeLength));
+
+                screen.AppendOuterRow(rowBuffer.ToString());
+            }
+            else
+            {
+                screen.AppendOuterRow("~");
+            }
+        }
+        void DrawSatausBar(IScreen screen)
         {
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
             var documentRowCount = this.document.Rows.Count;
             var fileInfo = $"{fileName:.20} - {documentRowCount} lines";
             var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X}";
-            var padding = this.console.Width - fileInfo.Length - positionInfo.Length - 1;
+            var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
-            buffer.AppendRow(fileInfo + new string(' ', padding) + positionInfo);
+            screen.AppendRow(fileInfo + new string(' ', padding) + positionInfo);
         }
-        void DrawMessageBar(IScreen buffer)
+        void DrawMessageBar(IScreen screen)
         {
             if (DateTime.Now - this.statusMessage.Time < TimeSpan.FromSeconds(5))
             {
                 var text = this.statusMessage.Value;
                 var textLength = Math.Min(text.Length, this.console.Width);
-                buffer.AppendRow(text.Substring(0, textLength));
+                screen.AppendRow(text.Substring(0, textLength));
             }
             else
             {
-                buffer.AppendRow("");
+                screen.AppendRow("");
             }
         }
 
-        public void SetStatusMessage(string value)
-        {
-            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
-        }
-
-        public EditorProcessingResults ProcessKeyPress(ConsoleKeyInfo key)
+        EditorProcessingResults ProcessKeyPress(ConsoleKeyInfo key)
         {
             if (key == SpecialKeys.CtrlQ)
             {
-                this.console.Clear();
                 return EditorProcessingResults.Quit;
             }
             switch (key.Key)
@@ -422,12 +473,18 @@ namespace cilo
                 case ConsoleKey.LeftArrow:
                 case ConsoleKey.RightArrow:
                     return this.MoveCursor(key.Key);
+                case ConsoleKey.A:
+                    if ((key.Modifiers & ConsoleModifiers.Alt) != 0)
+                    {
+                        return SwitchAmbiguousWidth();
+                    }
+                    break;
             }
 
             return EditorProcessingResults.Running;
         }
 
-        public EditorProcessingResults MovePage(ConsoleKey key)
+        EditorProcessingResults MovePage(ConsoleKey key)
         {
             switch (key)
             {
@@ -441,7 +498,7 @@ namespace cilo
             return EditorProcessingResults.Running;
         }
 
-        public EditorProcessingResults MoveCursor(ConsoleKey key)
+        EditorProcessingResults MoveCursor(ConsoleKey key)
         {
             switch (key)
             {
@@ -458,6 +515,16 @@ namespace cilo
                     this.document.MoveDown();
                     break;
             }
+            return EditorProcessingResults.Running;
+        }
+
+        EditorProcessingResults SwitchAmbiguousWidth()
+        {
+            this.setting.IsFullWidthAmbiguous = !this.setting.IsFullWidthAmbiguous;
+            var ambiguousSize =
+                this.setting.IsFullWidthAmbiguous ? "Full Width"
+                : "Half Width";
+            this.SetStatusMessage($"East Asian Width / Ambiguous = {ambiguousSize}");
             return EditorProcessingResults.Running;
         }
     }
