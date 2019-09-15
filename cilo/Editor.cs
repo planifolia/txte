@@ -264,7 +264,7 @@ namespace cilo
             {
                 this.renderPositionX = 
                     this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, setting);
-                if (valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
+                if (this.valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
                 {
                     overshoot =
                         this.Rows[this.valuePosition.Y].Value[this.valuePosition.X]
@@ -370,11 +370,11 @@ namespace cilo
                 var docRow = y + this.document.Offset.Y;
                 if (docRow < this.document.Rows.Count)
                 {
-                    DrawDocumentRow(screen, ambiguousSetting, docRow);
+                    this.DrawDocumentRow(screen, ambiguousSetting, docRow);
                 }
                 else
                 {
-                    DrawOutofBounds(screen, y);
+                    this.DrawOutofBounds(screen, y);
                 }
             }
         }
@@ -476,7 +476,7 @@ namespace cilo
                 case ConsoleKey.A:
                     if ((key.Modifiers & ConsoleModifiers.Alt) != 0)
                     {
-                        return SwitchAmbiguousWidth();
+                        return this.SwitchAmbiguousWidth();
                     }
                     break;
             }
