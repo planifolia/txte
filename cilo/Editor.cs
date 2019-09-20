@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace cilo
 {
@@ -19,6 +21,7 @@ namespace cilo
     {
         Running,
         Quit,
+        Queued,
     }
 
     class TemporaryMessage
@@ -45,10 +48,12 @@ namespace cilo
 
         public Editor(IConsole console, EditorSetting setting)
         {
+            this.eventQueue = new EventQueue(this.ProcessLoop);
             this.console = console;
             this.setting = setting;
         }
 
+        readonly EventQueue eventQueue;
         readonly IConsole console;
 
         Document document;
@@ -60,25 +65,61 @@ namespace cilo
             this.document = document;
         }
 
+        public void SetStatusMessage(string value)
+        {
+            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
+        }
+
         public void Run()
         {
-            while (true)
+            this.RefreshScreen();
+            using (var cancellationController = new CancellationTokenSource())
             {
-                this.RefreshScreen();
-                switch (this.ProcessKeyPress(this.console.ReadKey()))
+                var userInput = CreateEventTask(
+                    EventType.UserAction,
+                    this.console.ReadKey,
+                    cancellationController.Token
+                );
+                var timeout = CreateEventTask(
+                    EventType.Timeout,
+                    this.GenerateTimeout,
+                    cancellationController.Token
+                );
+
+                Task.WaitAny(userInput, timeout);
+                cancellationController.Cancel();
+            }
+            this.console.Clear();
+        }
+
+        ConsoleKeyInfo GenerateTimeout()
+        {
+            Thread.Sleep(1000);
+            return default;
+        }
+
+        Task CreateEventTask(EventType eventType, Func<ConsoleKeyInfo> inputGenerator, CancellationToken cancellationToken) => Task.Run(() =>
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var keyInfo = inputGenerator();
+                if (cancellationToken.IsCancellationRequested) { return; }
+                switch (this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo)))
                 {
                     case EditorProcessingResults.Quit:
-                        this.console.Clear();
                         return;
                     default:
                         continue;
                 }
             }
-        }
+        }, cancellationToken);
 
-        public void SetStatusMessage(string value)
+        EditorProcessingResults ProcessLoop(InputEventArgs inputEvent)
         {
-            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
+            var result = this.ProcessKeyPress(inputEvent.ConsoleKeyInfo);
+            this.RefreshScreen();
+            return result;
+
         }
 
         void RefreshScreen()
