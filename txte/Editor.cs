@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -59,6 +60,8 @@ namespace txte
         Document document;
         TemporaryMessage statusMessage;
         EditorSetting setting;
+
+        Size editArea => new Size(this.console.Size.Width, this.console.Size.Height - 2);
 
         public void SetDocument(Document document)
         {
@@ -124,7 +127,7 @@ namespace txte
 
         void RefreshScreen()
         {
-            this.document.UpdateOffset(this.console, this.setting);
+            this.document.UpdateOffset(this.editArea, this.setting);
             this.console.RefreshScreen(
                 this.setting,
                 this.DrawEditorRows,
@@ -136,7 +139,7 @@ namespace txte
         void DrawEditorRows(IScreen screen)
         {
             bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
-            for (int y = 0; y < this.console.EditorHeight; y++)
+            for (int y = 0; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
                 if (docRow < this.document.Rows.Count)
@@ -173,7 +176,7 @@ namespace txte
 
         void DrawOutofBounds(IScreen screen, int y)
         {
-            if (this.document.Rows.Count == 0 && y == this.console.EditorHeight / 3)
+            if (this.document.Rows.Count == 0 && y == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = Math.Min(welcome.Length, this.console.Width);
@@ -299,10 +302,10 @@ namespace txte
             switch (key)
             {
                 case ConsoleKey.PageUp:
-                    this.document.MovePageUp(this.console.EditorHeight);
+                    this.document.MovePageUp(this.editArea.Height);
                     break;
                 case ConsoleKey.PageDown:
-                    this.document.MovePageDown(this.console.EditorHeight);
+                    this.document.MovePageDown(this.editArea.Height);
                     break;
             }
             return EditorProcessingResults.Running;

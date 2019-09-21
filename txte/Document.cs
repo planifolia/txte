@@ -246,7 +246,7 @@ namespace txte
             }
         }
 
-        public void UpdateOffset(IConsole console, EditorSetting setting)
+        public void UpdateOffset(Size editArea, EditorSetting setting)
         {
             this.renderPositionX = 0;
             int overshoot = 0;
@@ -266,17 +266,17 @@ namespace txte
             {
                 this.offset.Y = this.valuePosition.Y;
             }
-            if (this.valuePosition.Y >= this.offset.Y + console.EditorHeight)
+            if (this.valuePosition.Y >= this.offset.Y + editArea.Height)
             {
-                this.offset.Y = this.valuePosition.Y - console.EditorHeight + 1;
+                this.offset.Y = this.valuePosition.Y - editArea.Height + 1;
             }
             if (this.renderPositionX < this.offset.X)
             {
                 this.offset.X = this.renderPositionX;
             }
-            if (this.renderPositionX >= this.offset.X + console.Width)
+            if (this.renderPositionX >= this.offset.X + editArea.Width)
             {
-                this.offset.X = this.renderPositionX - console.Width + 1 + overshoot;
+                this.offset.X = this.renderPositionX - editArea.Width + 1 + overshoot;
             }
         }
     }

@@ -6,7 +6,6 @@ namespace txte
     interface IConsole
     {
         int Height { get; }
-        int EditorHeight { get; }
         int Width { get; }
         Size Size { get; }
 

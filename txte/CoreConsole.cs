@@ -16,7 +16,6 @@ namespace txte
         }
 
         public int Height => Console.WindowHeight;
-        public int EditorHeight => this.Height - 2 /* status + message */;
         public int Width => Console.BufferWidth - 1;
         public Size Size => new Size(this.Width, this.Height);
 
