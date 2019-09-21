@@ -9,16 +9,24 @@ namespace txte
         {
             try
             {
-                var setting = new EditorSetting();
-                var document =
-                    (args.Length >= 1) ? Document.Open(args[0], setting)
-                    : new Document();
                 var console = new CoreConsole();
-                var editor = new Editor(console, setting);
-                editor.SetDocument(document);
-                editor.SetStatusMessage("HELP: Ctrl-Q to quit, Alt-A to switch EAW ambiguous width...");
-                editor.Run();
-                return 0;
+                try
+                {
+                    var setting = new EditorSetting();
+                    var document =
+                        (args.Length >= 1) ? Document.Open(args[0], setting)
+                        : new Document();
+                    var editor = new Editor(console, setting);
+                    editor.SetDocument(document);
+                    editor.SetStatusMessage("HELP: Ctrl-Q to quit, Alt-A to switch EAW ambiguous width...");
+                    editor.Run();
+                    return 0;
+                }
+                finally
+                {
+                    console.ResetColor();
+                    console.Clear();
+                }
             }
             catch(EditorException ex)
             {

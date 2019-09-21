@@ -1,6 +1,4 @@
-﻿#if !ESCAPE_SEQUENCE_ENHANCED
-
-using System;
+﻿using System;
 using System.Drawing;
 
 namespace txte
@@ -19,12 +17,42 @@ namespace txte
         public int Width => Console.BufferWidth - 1;
         public Size Size => new Size(this.Width, this.Height);
 
-        ConsoleColor defaultColor;
-        ConsoleColor defauldBackgroundColor;
+        OriginatedColor defaultForegroundColor;
+        OriginatedColor defaultBackgroundColor;
+
+        OriginatedColor ForegroundColor
+        {
+            get { return this._foregroundColor; }
+            set
+            {
+                this._foregroundColor = value;
+                Console.ForegroundColor = this._foregroundColor.GetColorFor(ColorTarget.Foreground);
+            }
+        }
+        OriginatedColor _foregroundColor;
+
+        OriginatedColor BackgroundColor
+        {
+            get { return this._backgroundColor; }
+            set
+            {
+                this._backgroundColor = value;
+                Console.BackgroundColor = this._backgroundColor.GetColorFor(ColorTarget.Background);
+            }
+        }
+        OriginatedColor _backgroundColor;
+        
 
         public ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
 
         public void Clear() => Console.Clear();
+
+        public void ResetColor()
+        {
+            Console.ResetColor();
+            this.ForegroundColor = this.defaultForegroundColor;
+            this.BackgroundColor = this.defaultBackgroundColor;
+        }
 
         public void RefreshScreen(
             EditorSetting setting,
@@ -60,15 +88,20 @@ namespace txte
 
         void InitializeColorSettings()
         {
-            this.ResetColor();
-            this.defaultColor = Console.ForegroundColor;
-            this.defauldBackgroundColor = Console.BackgroundColor;
+            Console.ResetColor();
+            this.ForegroundColor =
+            this.defaultForegroundColor =
+                new OriginatedColor(ColorTarget.Foreground, Console.ForegroundColor);
+            this.BackgroundColor =
+            this.defaultBackgroundColor 
+                = new OriginatedColor(ColorTarget.Background, Console.BackgroundColor);
         }
 
-        void ResetColor() => Console.ResetColor();
-        void ReverseColor() =>
-            (Console.ForegroundColor, Console.BackgroundColor) =
-            (Console.BackgroundColor, Console.ForegroundColor);
+        void ReverseColor()
+        {
+            (this.ForegroundColor, this.BackgroundColor) =
+                (this.BackgroundColor, this.ForegroundColor);
+        }
 
         class Screen : IScreen
         {
@@ -117,19 +150,61 @@ namespace txte
 
             void AppendFragmentChar(char fragment)
             {
-                Console.ForegroundColor = ConsoleColor.Blue;
-                Console.BackgroundColor = this.console.defaultColor;
+                this.console.ForegroundColor = new OriginatedColor(ConsoleColor.Blue);
+                this.console.BackgroundColor = this.console.defaultForegroundColor;
                 Console.Write(fragment);
-                Console.ResetColor();
+                this.console.ResetColor();
             }
 
             public void AppendOuterRow(string value)
             {
-                Console.ForegroundColor = ConsoleColor.DarkCyan;
+                this.console.ForegroundColor = new OriginatedColor(ConsoleColor.DarkCyan);
+                this.console.BackgroundColor = this.console.defaultBackgroundColor;
                 this.AppendRow(value);
-                Console.ResetColor();
+                this.console.ResetColor();
+            }
+        }
+
+        enum ColorTarget
+        {
+            User,
+            Foreground,
+            Background,
+        }
+        struct OriginatedColor
+        {
+            public OriginatedColor(ConsoleColor color) : this(ColorTarget.User, color) { }
+
+            public OriginatedColor(ColorTarget origin, ConsoleColor color)
+            {
+                this.Origin = origin;
+                this.Color = color;
+            }
+
+            public readonly ColorTarget Origin;
+            public readonly ConsoleColor Color; 
+
+            public ConsoleColor GetColorFor(ColorTarget target)
+            {
+                // Treat the default color (-1) when reverse onsole color.
+
+                // If this.Color is specified, return that color.
+                if ((int)this.Color != -1) { return this.Color; }
+
+                // Return the color assumed that color scheme is dark if the console color is reversed. 
+                if (target == ColorTarget.Foreground  && this.Origin == ColorTarget.Background)
+                {
+                    return ConsoleColor.Black;
+                }
+                else if (target == ColorTarget.Background  && this.Origin == ColorTarget.Foreground)
+                {
+                    return ConsoleColor.Gray;
+                }
+                else
+                {
+                    return this.Color;
+                }
             }
         }
     }
 }
-#endif
