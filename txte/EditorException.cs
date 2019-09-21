@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace cilo
+namespace txte
 {
     [Serializable]
     public class EditorException : Exception

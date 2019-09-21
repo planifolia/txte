@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace cilo
+namespace txte
 {
     static class SpecialKeys
     {
@@ -175,7 +175,7 @@ namespace cilo
         {
             if (this.document.Rows.Count == 0 && y == this.console.EditorHeight / 3)
             {
-                var welcome = $"Cilo editor -- version {Version}";
+                var welcome = $"txte -- version {Version}";
                 var welcomeLength = Math.Min(welcome.Length, this.console.Width);
                 var padding = (this.console.Width - welcomeLength) / 2;
                 var rowBuffer = new StringBuilder();

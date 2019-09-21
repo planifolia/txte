@@ -5,7 +5,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace cilo
+namespace txte
 {
     class ConsoleWithEscapeSequence : IConsole
     {

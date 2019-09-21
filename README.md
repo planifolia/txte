@@ -1,9 +1,10 @@
-# Cilo Text Editor after "Build your own text editor"
+# TxtE - .NET Core Text Editor after "Build your own text editor"
 
 ## How to use
 
-### dotnet command and dll
+### dotnet command and FDD (Framework-dependent deployments)
 
 ```sh
-dotnet cilo.dll "path/to/text.file"
+cd /path/to/txte
+dotnet txte.dll "/path/to/text.file"
 ```

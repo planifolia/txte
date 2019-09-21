@@ -1,4 +1,4 @@
-namespace cilo
+namespace txte
 {
     static class EastAsianWidthInfo
     {

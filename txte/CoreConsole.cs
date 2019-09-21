@@ -3,7 +3,7 @@
 using System;
 using System.Drawing;
 
-namespace cilo
+namespace txte
 {
     class CoreConsole : IConsole
     {
