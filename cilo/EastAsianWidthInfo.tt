@@ -1,0 +1,138 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ output extension="cs" encoding="utf-8" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Collections" #>
+<#@ assembly name="System.ComponentModel.Primitives" #>
+<#@ assembly name="System.Net.WebClient" #>
+<#@ assembly name="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Net" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#
+var webClient = new WebClient();
+var lines =
+    webClient.DownloadString("http://www.unicode.org/Public/UCD/latest/ucd/EastAsianWidth.txt")
+    .Split(new string[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
+var entriesWithAppendix =
+    lines
+    .Where(x => !Regex.IsMatch(x, "^\\s*#"));
+var entryBases =
+    entriesWithAppendix
+    .Select(x =>
+    {
+        var e = x.Split('#')[0].Trim(); var items = e.Split(';');
+        return (range: items[0], type: items[1]);
+    });
+var entries =
+    entryBases
+    .Select(x =>
+    {
+        var rs = x.range.Split(new[] { ".." }, StringSplitOptions.None);
+        return (
+            range: (
+                x.range.Contains("..")
+                ? (start: Convert.ToInt32(rs[0], 16), end: Convert.ToInt32(rs[1], 16))
+                : (start: Convert.ToInt32(x.range, 16), end: Convert.ToInt32(x.range, 16))
+            ),
+            x.type);
+    });
+var eawInfo =
+    entries
+    .OrderBy(x => x.range.start)
+    .Aggregate(new Stack<((int start, int end) range, string type)>(), (acc, x) =>
+    {
+        if (acc.Count == 0)
+        {
+            acc.Push(x);
+        }
+        else
+        {
+            if (acc.Peek().type == x.type)
+            {
+                var before = acc.Pop();
+                acc.Push((range: (before.range.start, x.range.end), x.type));
+            }
+            else
+            {
+                acc.Push(x);
+            }
+        }
+        return acc;
+    })
+    .Where(x => x.type != "N")
+    .Reverse()
+    .ToArray();
+#>
+
+namespace cilo
+{
+    static class EastAsianWidthInfo
+    {
+
+        public static EastAsianWidthTypes GetEastAsianWidthType(this char value)
+        {
+            // search EAW with binary search
+            int low = 0;
+            int high = entriesWithoutN.Length - 1;
+            while (low <= high)
+            {
+                var i = (low + high) / 2;
+                var candidate = entriesWithoutN[i];
+                if (value < candidate.Start)
+                {
+                    high = i - 1;
+                }
+                else if (value > candidate.End)
+                {
+                    low = i + 1;
+                }
+                else
+                {
+                    return candidate.Type;
+                }
+            }
+            return EastAsianWidthTypes.N;
+        }
+
+        static readonly EastAsianWidthEntry[] entriesWithoutN = new[]
+        {
+<#
+    foreach (var eaw in eawInfo)
+    {
+#>
+            new EastAsianWidthEntry(<#= eaw.range.start #>, <#= eaw.range.end #>, EastAsianWidthTypes.<#= eaw.type #>),
+<#
+    }
+#>
+        };
+
+    }
+
+    enum EastAsianWidthTypes
+    {
+        N,
+        F,
+        H,
+        W,
+        Na,
+        A,
+    }
+
+    struct EastAsianWidthEntry
+    {
+        public EastAsianWidthEntry(int start, int end, EastAsianWidthTypes type)
+        {
+            this.Start = start;
+            this.End = end;
+            this.Type = type;
+        }
+
+        public readonly int Start;
+        public readonly int End;
+        public readonly EastAsianWidthTypes Type;
+
+        public override string ToString() => $"[{this.Start}, {this.End}] {this.Type}";
+    }
+
+}

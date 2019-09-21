@@ -1,4 +1,4 @@
-﻿
+
 namespace cilo
 {
     static class EastAsianWidthInfo
