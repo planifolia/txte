@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace txte
@@ -18,10 +19,11 @@ namespace txte
             Action<IScreen> drawMessageBar,
             Point cursor);
     }
+
     interface IScreen
     {
         void AppendRow(string value);
-        void AppendFragmentedRow(string value, bool startIsFragmented, bool endIsFragmented);
+        void AppendRow(IEnumerable<StyledString> spans);
         void AppendOuterRow(string value);
     }
 }

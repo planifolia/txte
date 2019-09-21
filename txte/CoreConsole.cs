@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace txte
@@ -26,7 +27,7 @@ namespace txte
             set
             {
                 this._foregroundColor = value;
-                Console.ForegroundColor = this._foregroundColor.GetColorFor(ColorTarget.Foreground);
+                Console.ForegroundColor = this._foregroundColor.GetColorFor(ColorType.Foreground);
             }
         }
         OriginatedColor _foregroundColor;
@@ -37,7 +38,7 @@ namespace txte
             set
             {
                 this._backgroundColor = value;
-                Console.BackgroundColor = this._backgroundColor.GetColorFor(ColorTarget.Background);
+                Console.BackgroundColor = this._backgroundColor.GetColorFor(ColorType.Background);
             }
         }
         OriginatedColor _backgroundColor;
@@ -91,10 +92,10 @@ namespace txte
             Console.ResetColor();
             this.ForegroundColor =
             this.defaultForegroundColor =
-                new OriginatedColor(ColorTarget.Foreground, Console.ForegroundColor);
+                new OriginatedColor(ColorType.Foreground, Console.ForegroundColor);
             this.BackgroundColor =
             this.defaultBackgroundColor 
-                = new OriginatedColor(ColorTarget.Background, Console.BackgroundColor);
+                = new OriginatedColor(ColorType.Background, Console.BackgroundColor);
         }
 
         void ReverseColor()
@@ -129,18 +130,18 @@ namespace txte
                 this.rowCount++;
             }
 
-            public void AppendFragmentedRow(string value, bool startIsFragmented, bool endIsFragmented)
+            public void AppendRow(IEnumerable<StyledString> spans)
             {
-                if (startIsFragmented) { this.AppendFragmentChar(']'); }
-                Console.Write(value);
-                if (endIsFragmented) { this.AppendFragmentChar('['); }
-                Console.Write(new string(
-                    ' ',
-                    this.size.Width
-                    - value.GetConsoleLength(this.ambuguosIsfullWidth)
-                    - (startIsFragmented ? 1 : 0)
-                    - (endIsFragmented ? 1 : 0)
-                ));
+                int written = 0;
+                foreach (var span in spans)
+                {
+                    this.AppendStyledString(span);
+                    written += span.Value.GetConsoleLength(this.ambuguosIsfullWidth);
+                }
+                if (this.size.Width - written is var padding && padding > 0)
+                {
+                    Console.Write(new string(' ', padding));
+                }
                 if (this.rowCount < this.size.Height - 1)
                 {
                     Console.WriteLine();
@@ -148,43 +149,87 @@ namespace txte
                 this.rowCount++;
             }
 
-            void AppendFragmentChar(char fragment)
-            {
-                this.console.ForegroundColor = new OriginatedColor(ConsoleColor.Blue);
-                this.console.BackgroundColor = this.console.defaultForegroundColor;
-                Console.Write(fragment);
-                this.console.ResetColor();
-            }
-
             public void AppendOuterRow(string value)
             {
-                this.console.ForegroundColor = new OriginatedColor(ConsoleColor.DarkCyan);
-                this.console.BackgroundColor = this.console.defaultBackgroundColor;
-                this.AppendRow(value);
-                this.console.ResetColor();
+                var foreground = this.console.ForegroundColor;
+                var background = this.console.BackgroundColor;
+                try
+                {
+                    this.console.ForegroundColor = new OriginatedColor(ConsoleColor.DarkCyan);
+                    this.console.BackgroundColor = this.console.defaultBackgroundColor;
+                    this.AppendRow(value);
+                }
+                finally
+                {
+                    this.console.ForegroundColor = foreground;
+                    this.console.BackgroundColor = background;
+                }
             }
+
+            void AppendStyledString(StyledString span)
+            {
+                var foreground = this.console.ForegroundColor;
+                var background = this.console.BackgroundColor;
+                try
+                {
+                    this.console.ForegroundColor = this.GetConsoleColor(span.ColorSet.Foreground);
+                    this.console.BackgroundColor = this.GetConsoleColor(span.ColorSet.Background);
+                    Console.Write(span.Value);
+                }
+                finally
+                {
+                    this.console.ForegroundColor = foreground;
+                    this.console.BackgroundColor = background;
+                }
+            }
+
+            void AppendFragmentChar(char fragment)
+            {
+                var foreground = this.console.ForegroundColor;
+                var background = this.console.BackgroundColor;
+                try
+                {
+                    this.console.ForegroundColor = new OriginatedColor(ConsoleColor.Blue);
+                    this.console.BackgroundColor = this.console.defaultForegroundColor;
+                    Console.Write(fragment);
+                }
+                finally
+                {
+                    this.console.ForegroundColor = foreground;
+                    this.console.BackgroundColor = background;
+                }
+            }
+
+            OriginatedColor GetConsoleColor(ThemeColor color)
+            {
+                switch (color.Type)
+                {
+                    case ColorType.Foreground:
+                        return this.console.defaultForegroundColor;
+                    case ColorType.Background:
+                        return this.console.defaultBackgroundColor;
+                    case ColorType.User:
+                    default:
+                        return new OriginatedColor(color.Color);
+                }
+            }
+
         }
 
-        enum ColorTarget
-        {
-            User,
-            Foreground,
-            Background,
-        }
         struct OriginatedColor
         {
-            public OriginatedColor(ConsoleColor color) : this(ColorTarget.User, color) { }
+            public OriginatedColor(ConsoleColor color) : this(ColorType.User, color) { }
 
-            public OriginatedColor(ColorTarget origin, ConsoleColor color)
+            public OriginatedColor(ColorType origin, ConsoleColor color)
             {
                 this.Origin = origin;
                 this.Color = color;
             }
 
-            public readonly ColorTarget Origin;
+            public readonly ColorType Origin;
             public readonly ConsoleColor Color; 
 
-            public ConsoleColor GetColorFor(ColorTarget target)
+            public ConsoleColor GetColorFor(ColorType target)
             {
                 // Treat the default color (-1) when reverse onsole color.
 
@@ -192,11 +237,11 @@ namespace txte
                 if ((int)this.Color != -1) { return this.Color; }
 
                 // Return the color assumed that color scheme is dark if the console color is reversed. 
-                if (target == ColorTarget.Foreground  && this.Origin == ColorTarget.Background)
+                if (target == ColorType.Foreground  && this.Origin == ColorType.Background)
                 {
                     return ConsoleColor.Black;
                 }
-                else if (target == ColorTarget.Background  && this.Origin == ColorTarget.Foreground)
+                else if (target == ColorType.Background  && this.Origin == ColorType.Foreground)
                 {
                     return ConsoleColor.Gray;
                 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
@@ -46,6 +47,7 @@ namespace txte
     class Editor
     {
         public static string Version = "0.0.1";
+
 
         public Editor(IConsole console, EditorSetting setting)
         {
@@ -155,18 +157,23 @@ namespace txte
 
         void DrawDocumentRow(IScreen screen, bool ambiguousSetting, int docRow)
         {
-            var docText = this.document.Rows[docRow].Render;
-            var docLength =
+            var render = this.document.Rows[docRow].Render;
+            var sublenderLength =
                 Math.Clamp(
-                    docText.GetConsoleLength(ambiguousSetting) - this.document.Offset.X,
+                    render.GetConsoleLength(ambiguousSetting) - this.document.Offset.X,
                     0, this.console.Width
                 );
-            if (docLength > 0)
+            if (sublenderLength > 0)
             {
-                var (render, startIsFragmented, endIsFragmented) =
-                    docText.SubConsoleString(this.document.Offset.X, docLength, ambiguousSetting);
+                var (subrender, startIsFragmented, endIsFragmented) =
+                    render.SubConsoleString(this.document.Offset.X, sublenderLength, ambiguousSetting);
 
-                screen.AppendFragmentedRow(render, startIsFragmented, endIsFragmented);
+                var spans = new List<StyledString>();
+                if (startIsFragmented) { spans.Add(new StyledString("]", ColorSet.Fragment)); }
+                spans.Add(new StyledString(subrender));
+                if (endIsFragmented) { spans.Add(new StyledString("[", ColorSet.Fragment)); }
+
+                screen.AppendRow(spans);
             }
             else
             {
