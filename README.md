@@ -1,4 +1,4 @@
-# TxtE - .NET Core Text Editor after "Build your own text editor"
+# txte - .NET Core Text Editor after "Build your own text editor"
 
 ## How to use
 
