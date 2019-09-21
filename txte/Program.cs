@@ -13,6 +13,7 @@ namespace txte
                 var document =
                     (args.Length >= 1) ? Document.Open(args[0], setting)
                     : new Document();
+                var console = new CoreConsole();
                 var editor = new Editor(console, setting);
                 editor.SetDocument(document);
                 editor.SetStatusMessage("HELP: Ctrl-Q to quit, Alt-A to switch EAW ambiguous width...");
