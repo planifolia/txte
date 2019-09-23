@@ -1,9 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace txte
 {
+    class InputEvent
+    {
+        public InputEvent(InputEventArgs args)
+        {
+            this.Args = args;
+            this.IsHandled = false;
+        }
+        public readonly InputEventArgs Args;
+        public bool IsHandled;
+    }
     class InputEventArgs
     {
         public InputEventArgs(EventType eventType, ConsoleKeyInfo consoleKeyInfo)
@@ -12,8 +22,14 @@ namespace txte
             this.ConsoleKeyInfo = consoleKeyInfo;
         }
 
-        public EventType EventType;
-        public ConsoleKeyInfo ConsoleKeyInfo;
+        public readonly EventType EventType;
+        public readonly ConsoleKeyInfo ConsoleKeyInfo;
+
+        public void Deconstruct(out EventType eventType, out ConsoleKeyInfo consoleKeyInfo)
+        {
+            eventType = this.EventType;
+            consoleKeyInfo = this.ConsoleKeyInfo;
+        }
     }
 
     enum EventType
@@ -24,16 +40,9 @@ namespace txte
 
     class EventQueue
     {
-        public EventQueue(Func<InputEventArgs, EditorProcessingResults> dispachedMethod)
-        {
-            this.dispachedMethod = dispachedMethod;
-        }
+        readonly Queue<InputEvent> queue = new Queue<InputEvent>();
 
-        readonly Func<InputEventArgs, EditorProcessingResults> dispachedMethod;
-
-        readonly Queue<InputEventArgs> queue = new Queue<InputEventArgs>();
-
-        public EditorProcessingResults PostEvent(InputEventArgs eventArgs)
+        public void PostEvent(InputEventArgs eventArgs)
         {
             lock (this.queue)
             {
@@ -41,30 +50,31 @@ namespace txte
                 {
                     if (eventArgs.EventType != EventType.Timeout)
                     {
-                        this.queue.Enqueue(eventArgs);
+                        return;
                     }
-                    return EditorProcessingResults.Queued;
                 }
-                this.queue.Enqueue(eventArgs);
-
+                this.queue.Enqueue(new InputEvent(eventArgs));
             }
+        }
+        
+        public async Task<InputEventArgs> RecieveReadKeyEventAsync()
+        {
             while (true)
             {
-                var result = this.dispachedMethod(eventArgs);
-                if (result == EditorProcessingResults.Quit)
-                {
-                    return result;
-                }
                 lock (this.queue)
                 {
-                    this.queue.Dequeue();
-                    if (this.queue.Count == 0)
+                    while(this.queue.TryPeek(out var closableEvent) && closableEvent.IsHandled)
                     {
-                        return result;
+                        this.queue.Dequeue();
+                    }
+                    if (this.queue.TryPeek(out var @event))
+                    {
+                        @event.IsHandled = true;
+                        return @event.Args;
                     }
                 }
+                await Task.Delay(1);
             }
-
         }
     }
 }

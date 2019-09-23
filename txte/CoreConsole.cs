@@ -122,7 +122,14 @@ namespace txte
 
             public void AppendRow(string value)
             {
-                Console.Write(value + new string(' ', this.size.Width - value.GetConsoleLength(this.ambuguosIsfullWidth)));
+                int written = 0;
+                Console.Write(value);
+                written += value.GetConsoleLength(this.ambuguosIsfullWidth);
+                var padding = this.size.Width - written;
+                if (padding > 0)
+                {
+                    Console.Write(new string(' ', padding));
+                }
                 if (this.rowCount < this.size.Height - 1)
                 {
                     Console.WriteLine();
@@ -138,7 +145,8 @@ namespace txte
                     this.AppendStyledString(span);
                     written += span.Value.GetConsoleLength(this.ambuguosIsfullWidth);
                 }
-                if (this.size.Width - written is var padding && padding > 0)
+                var padding = this.size.Width - written;
+                if (padding > 0)
                 {
                     Console.Write(new string(' ', padding));
                 }

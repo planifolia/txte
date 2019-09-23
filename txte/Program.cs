@@ -1,11 +1,12 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace txte
 {
     class Program
     {
 
-        static int Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
             try
             {
@@ -19,7 +20,7 @@ namespace txte
                     var editor = new Editor(console, setting);
                     editor.SetDocument(document);
                     editor.SetStatusMessage("HELP: Ctrl-Q to quit, Alt-A to switch EAW ambiguous width...");
-                    editor.Run();
+                    await editor.Run();
                     return 0;
                 }
                 finally

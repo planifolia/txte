@@ -16,6 +16,8 @@ namespace txte
             new ConsoleKeyInfo((char)0x03, ConsoleKey.C, false, false, true);
         public static readonly ConsoleKeyInfo CtrlQ = 
             new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, false, true);
+        public static readonly ConsoleKeyInfo AltQ = 
+            new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, true, false);
     }
 
 
@@ -51,7 +53,7 @@ namespace txte
 
         public Editor(IConsole console, EditorSetting setting)
         {
-            this.eventQueue = new EventQueue(this.ProcessLoop);
+            this.eventQueue = new EventQueue();
             this.console = console;
             this.setting = setting;
         }
@@ -75,49 +77,64 @@ namespace txte
             this.statusMessage = new TemporaryMessage(value, DateTime.Now);
         }
 
-        public void Run()
+        public async Task Run()
         {
-            this.RefreshScreen();
             using (var cancellationController = new CancellationTokenSource())
             {
-                var userInput = CreateEventTask(
-                    EventType.UserAction,
-                    this.console.ReadKey,
-                    cancellationController.Token
-                );
-                var timeout = CreateEventTask(
-                    EventType.Timeout,
-                    this.GenerateTimeout,
-                    cancellationController.Token
-                );
-
-                Task.WaitAny(userInput, timeout);
-                cancellationController.Cancel();
+                try
+                {
+                    var userInput = GenerateEventAsync(
+                        EventType.UserAction,
+                        this.ReadKeyAsync,
+                        cancellationController.Token
+                    );
+                    var timeout = GenerateEventAsync(
+                        EventType.Timeout,
+                        this.TimeOutAsync,
+                        cancellationController.Token
+                    );
+                    
+                    while (true)
+                    {
+                        this.RefreshScreen();
+                        (var eventType, var keyInfo) = await this.eventQueue.RecieveReadKeyEventAsync();
+                        if (eventType == EventType.Timeout) { continue; }
+                        switch (this.ProcessKeyPress(keyInfo))
+                        {
+                            case EditorProcessingResults.Quit:
+                                return;
+                            default:
+                                continue;
+                        }
+                    }
+                }
+                finally
+                {
+                    cancellationController.Cancel();
+                }
             }
-            this.console.Clear();
         }
 
-        ConsoleKeyInfo GenerateTimeout()
+        async Task<ConsoleKeyInfo> TimeOutAsync()
         {
-            Thread.Sleep(1000);
+            await Task.Delay(1000);
             return default;
         }
+        async Task<ConsoleKeyInfo> ReadKeyAsync()
+        {
+            await Task.Yield();
+            return this.console.ReadKey();
+        }
 
-        Task CreateEventTask(EventType eventType, Func<ConsoleKeyInfo> inputGenerator, CancellationToken cancellationToken) => Task.Run(() =>
+        async Task GenerateEventAsync(EventType eventType, Func<Task<ConsoleKeyInfo>> inputGenerator, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var keyInfo = inputGenerator();
+                var keyInfo = await inputGenerator();
                 if (cancellationToken.IsCancellationRequested) { return; }
-                switch (this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo)))
-                {
-                    case EditorProcessingResults.Quit:
-                        return;
-                    default:
-                        continue;
-                }
+                this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo));
             }
-        }, cancellationToken);
+        }
 
         EditorProcessingResults ProcessLoop(InputEventArgs inputEvent)
         {
