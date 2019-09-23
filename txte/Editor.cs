@@ -301,7 +301,7 @@ namespace txte
             switch (keyInfo.Key)
             {
                 case ConsoleKey.L:
-                    return this.DelegateProcesing(this.console.Clear);
+                    return this.DelegateProcessing(this.console.Clear);
                 case ConsoleKey.Q:
                     
                     return KeyProcessingResults.Quit;
@@ -318,9 +318,9 @@ namespace txte
             switch (keyInfo.Key)
             {
                 case ConsoleKey.Home:
-                    return this.DelegateProcesing(this.document.MoveStartOfFile);
+                    return this.DelegateProcessing(this.document.MoveStartOfFile);
                 case ConsoleKey.End:
-                    return this.DelegateProcesing(this.document.MoveEndOfFile);
+                    return this.DelegateProcessing(this.document.MoveEndOfFile);
 
                 default:
                     if (char.IsControl(keyInfo.KeyChar))
@@ -336,9 +336,9 @@ namespace txte
             switch (keyInfo.Key)
             {
                 case ConsoleKey.Home:
-                    return this.DelegateProcesing(this.document.MoveHome);
+                    return this.DelegateProcessing(this.document.MoveHome);
                 case ConsoleKey.End:
-                    return this.DelegateProcesing(this.document.MoveEnd);
+                    return this.DelegateProcessing(this.document.MoveEnd);
 
                 case ConsoleKey.PageUp:
                 case ConsoleKey.PageDown:
@@ -351,12 +351,12 @@ namespace txte
                     return this.MoveCursor(keyInfo.Key);
 
                 case ConsoleKey.Enter:
-                    return this.DelegateProcesing(() => this.document.InsertNewLine(this.setting));
+                    return this.DelegateProcessing(() => this.document.InsertNewLine(this.setting));
 
                 case ConsoleKey.Backspace:
-                    return this.DelegateProcesing(() => this.document.BackSpace(this.setting));
+                    return this.DelegateProcessing(() => this.document.BackSpace(this.setting));
                 case ConsoleKey.Delete:
-                    return this.DelegateProcesing(() => this.document.DeleteChar(this.setting));
+                    return this.DelegateProcessing(() => this.document.DeleteChar(this.setting));
                         
                 default:
                     if (char.IsControl(keyInfo.KeyChar))
@@ -367,7 +367,7 @@ namespace txte
             }
         }
 
-        KeyProcessingResults DelegateProcesing(Action action)
+        KeyProcessingResults DelegateProcessing(Action action)
         {
             action();
             return KeyProcessingResults.Running;
