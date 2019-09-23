@@ -194,7 +194,7 @@ namespace txte
                     // Delete new line of previous line
                     this.Rows[position.Y - 1] =
                         new Row(
-                            this.Rows[position.Y - 1].Value + this.Rows[position.Y],
+                            this.Rows[position.Y - 1].Value + this.Rows[position.Y].Value,
                             asNewLine: true
                         );
                     this.Rows[position.Y - 1].UpdateRender(setting);
