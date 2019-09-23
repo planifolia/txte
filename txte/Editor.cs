@@ -43,6 +43,7 @@ namespace txte
             this.eventQueue = new EventQueue();
             this.console = console;
             this.setting = setting;
+            this.isTriedToQuit = false;
         }
 
         readonly EventQueue eventQueue;
@@ -51,6 +52,7 @@ namespace txte
         Document document;
         TemporaryMessage statusMessage;
         EditorSetting setting;
+        private bool isTriedToQuit;
 
         Size editArea => new Size(this.console.Size.Width, this.console.Size.Height - 2);
 
@@ -88,8 +90,20 @@ namespace txte
                         if (eventType == EventType.Timeout) { continue; }
                         switch (this.ProcessKeyPress(keyInfo))
                         {
-                            case KeyProcessingResults.Quit: return;
-                            default: continue;
+                            case KeyProcessingResults.Quit:
+                                if (this.isTriedToQuit || !this.document.IsModified)
+                                {
+                                    return;
+                                }
+                                else
+                                {
+                                    this.isTriedToQuit = true;
+                                    this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
+                                    break;
+                                }
+                            default:
+                                this.isTriedToQuit = false;
+                                continue;
                         }
                     }
                 }
@@ -111,7 +125,11 @@ namespace txte
             return this.console.ReadKey();
         }
 
-        async Task GenerateEventAsync(EventType eventType, Func<Task<ConsoleKeyInfo>> inputGenerator, CancellationToken cancellationToken)
+        async Task GenerateEventAsync(
+            EventType eventType,
+            Func<Task<ConsoleKeyInfo>> inputGenerator,
+            CancellationToken cancellationToken
+        )
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -119,14 +137,6 @@ namespace txte
                 if (cancellationToken.IsCancellationRequested) { return; }
                 this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo));
             }
-        }
-
-        KeyProcessingResults ProcessLoop(InputEventArgs inputEvent)
-        {
-            var result = this.ProcessKeyPress(inputEvent.ConsoleKeyInfo);
-            this.RefreshScreen();
-            return result;
-
         }
 
         void RefreshScreen()
@@ -211,8 +221,10 @@ namespace txte
         void DrawSatausBar(IScreen screen)
         {
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
-            var documentRowCount = this.document.Rows.Count;
-            var fileInfo = $"{fileName:.20} - {documentRowCount} lines";
+            var fileNameLength = Math.Min(fileName.Length, 20);
+            (var clippedFileName, _, _) = 
+                fileName.SubConsoleString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
+            var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
@@ -234,32 +246,43 @@ namespace txte
 
         KeyProcessingResults ProcessKeyPress(ConsoleKeyInfo keyInfo)
         {
-            var isOptioned =
-                (keyInfo.Modifiers & ConsoleModifiers.Alt) != 0 
-                || (keyInfo.Modifiers & ConsoleModifiers.Control) != 0;
-            var isShifted =
-                (keyInfo.Modifiers & ConsoleModifiers.Shift) != 0;
-            if (isOptioned)
+            switch (keyInfo.Modifiers)
             {
-                if (isShifted)
-                {
+                case ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift:
+                    return this.ProcessExOptionShiftKeyPress(keyInfo);
+                case ConsoleModifiers.Control | ConsoleModifiers.Alt:
+                    return this.ProcessExOptionKeyPress(keyInfo);
+                case ConsoleModifiers.Control | ConsoleModifiers.Shift:
+                case ConsoleModifiers.Alt | ConsoleModifiers.Shift:
                     return this.ProcessOptionShiftKeyPress(keyInfo);
-                }
-                else
-                {
+                case ConsoleModifiers.Control:
+                case ConsoleModifiers.Alt:
                     return this.ProcessOptionKeyPress(keyInfo);
-                }
-            }
-            else
-            {
-                if (isShifted)
-                {
+                case ConsoleModifiers.Shift:
                     return this.ProcessShiftKeyPress(keyInfo);
-                }
-                else
-                {
+                default:
                     return this.ProcessSingleKeyPress(keyInfo);
-                }
+            }
+        }
+
+        KeyProcessingResults ProcessExOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
+            {
+                default:
+                    return KeyProcessingResults.Unhandled;
+            }
+        }
+
+        KeyProcessingResults ProcessExOptionKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
+            {
+                case ConsoleKey.A:
+                    return this.SwitchAmbiguousWidth();
+
+                default:
+                    return KeyProcessingResults.Unhandled;
             }
 
         }
@@ -268,10 +291,6 @@ namespace txte
         {
             switch (keyInfo.Key)
             {
-
-                case ConsoleKey.A:
-                    return this.SwitchAmbiguousWidth();
-
                 default:
                     return KeyProcessingResults.Unhandled;
             }
@@ -281,14 +300,17 @@ namespace txte
         {
             switch (keyInfo.Key)
             {
+                case ConsoleKey.L:
+                    return this.DelegateProcesing(this.console.Clear);
                 case ConsoleKey.Q:
+                    
                     return KeyProcessingResults.Quit;
                 case ConsoleKey.S:
                     return this.Save();
+
                 default:
                     return KeyProcessingResults.Unhandled;
             }
-
         }
 
         KeyProcessingResults ProcessShiftKeyPress(ConsoleKeyInfo keyInfo)
@@ -297,7 +319,6 @@ namespace txte
             {
                 case ConsoleKey.Home:
                     return this.DelegateProcesing(this.document.MoveStartOfFile);
-
                 case ConsoleKey.End:
                     return this.DelegateProcesing(this.document.MoveEndOfFile);
 
@@ -316,7 +337,6 @@ namespace txte
             {
                 case ConsoleKey.Home:
                     return this.DelegateProcesing(this.document.MoveHome);
-
                 case ConsoleKey.End:
                     return this.DelegateProcesing(this.document.MoveEnd);
 
@@ -331,12 +351,12 @@ namespace txte
                     return this.MoveCursor(keyInfo.Key);
 
                 case ConsoleKey.Enter:
-                    // TODO: implement this
-                    return KeyProcessingResults.Running;
+                    return this.DelegateProcesing(() => this.document.InsertNewLine(this.setting));
 
                 case ConsoleKey.Backspace:
-                    // TODO: implement this
-                    return KeyProcessingResults.Running;
+                    return this.DelegateProcesing(() => this.document.BackSpace(this.setting));
+                case ConsoleKey.Delete:
+                    return this.DelegateProcesing(() => this.document.DeleteChar(this.setting));
                         
                 default:
                     if (char.IsControl(keyInfo.KeyChar))

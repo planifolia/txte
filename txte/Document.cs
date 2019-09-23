@@ -2,35 +2,48 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace txte
 {
     class Row
     {
-        public Row(string value)
+        public Row(string value) : this(value, false) {}
+        public Row(string value, bool asNewLine)
         {
             this.Value = value;
+            this.IsModified = asNewLine;
+            this.Render = "";
         }
 
         public string Value { get; private set; }
         public string Render { get; private set; }
+        public bool IsModified { get; private set; }
 
         public void InsertChar(char c, int at)
         {
             this.Value =
                 this.Value.Substring(0, at) + c + this.Value.Substring(at);
+            this.IsModified = true;
+        }
+
+        public void BackSpace(int at)
+        {
+            // requires: (0 < at && at <= this.Value.Length)
+            this.Value =
+                this.Value.Substring(0, at - 1) + this.Value.Substring(at);
+            this.IsModified = true;
+        }
+
+        internal void Establish()
+        {
+            this.IsModified = false;
         }
 
         public void UpdateRender(EditorSetting setting)
         {
             var tabSize = setting.TabSize;
-            //int tabs = 0;
-            //for (int i = 0; i < this.Value.Length; i++)
-            //{
-            //    if (this.Value[i] == '\t') { tabs++; }
-            //}
-            //var renderBuilder = new StringBuilder(this.Value.Length + tabs * (tabSize - 1));
             var renderBuilder = new StringBuilder();
             for (int iValue = 0; iValue < this.Value.Length; iValue++)
             {
@@ -101,6 +114,7 @@ namespace txte
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
         public Point ValuePosition => this.valuePosition;
         public Point Offset => this.offset;
+        public bool IsModified => this.Rows.Any(x => x.IsModified);
 
         int renderPositionX;
         Point valuePosition;
@@ -114,20 +128,92 @@ namespace txte
                 foreach (var row in this.Rows)
                 {
                     file.WriteLine(row.Value);
+                    row.Establish();
                 }
             }
         }
 
         public void InsertChar(char c, EditorSetting setting)
         {
-
             if (this.valuePosition.Y == this.Rows.Count)
             {
                 this.Rows.Add(new Row(""));
             }
             this.Rows[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
             this.Rows[this.valuePosition.Y].UpdateRender(setting);
-            this.valuePosition.X++;
+            this.MoveRight();
+        }
+
+        public void InsertNewLine(EditorSetting setting)
+        {
+            if (this.valuePosition.X == 0)
+            {
+                // it condition contains that case: this.valuePosition.Y == this.Rows.Count.
+                this.Rows.Insert(this.ValuePosition.Y, new Row("", asNewLine: true));
+            }
+            else
+            {
+                this.Rows.Insert(
+                    this.ValuePosition.Y + 1,
+                    new Row(
+                        this.Rows[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
+                        asNewLine: true
+                    )
+                );
+                this.Rows[this.ValuePosition.Y] = 
+                    new Row(
+                        this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
+                        asNewLine: true
+                    );
+                this.Rows[this.valuePosition.Y].UpdateRender(setting);
+                this.Rows[this.valuePosition.Y + 1].UpdateRender(setting);
+            }
+            this.MoveHome();
+            this.MoveDown();
+        }
+        
+        public void BackSpace(EditorSetting setting)
+        {
+            var position = this.valuePosition;
+
+            this.MoveLeft();
+
+            if (position.X == 0 && position.Y == 0) { return; }
+            if (position.X == 0)
+            {
+                if (position.Y == 0)
+                {
+                    // Do nothing if at the start of file.
+                }
+                else if (position.Y == this.Rows.Count)
+                {
+                    // Only back cursor if at the end of file.
+                }
+                else
+                {
+                    // Delete new line of previous line
+                    this.Rows[position.Y - 1] =
+                        new Row(
+                            this.Rows[position.Y - 1].Value + this.Rows[position.Y],
+                            asNewLine: true
+                        );
+                    this.Rows[position.Y - 1].UpdateRender(setting);
+                    this.Rows.RemoveAt(position.Y);
+                }
+            }
+            else
+            {
+                this.Rows[position.Y].BackSpace(position.X);
+                this.Rows[position.Y].UpdateRender(setting);
+            }
+        }
+
+        public void DeleteChar(EditorSetting setting)
+        {
+            if (this.valuePosition.Y == this.Rows.Count) { return; }
+
+            this.MoveRight();
+            this.BackSpace(setting);
         }
 
         public void MoveLeft()
