@@ -8,24 +8,11 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    static class SpecialKeys
-    {
-        public static readonly ConsoleKeyInfo CtrlBreak = 
-            new ConsoleKeyInfo((char)0x00, ConsoleKey.Pause, false, false, true);
-        public static readonly ConsoleKeyInfo CtrlC = 
-            new ConsoleKeyInfo((char)0x03, ConsoleKey.C, false, false, true);
-        public static readonly ConsoleKeyInfo CtrlQ = 
-            new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, false, true);
-        public static readonly ConsoleKeyInfo AltQ = 
-            new ConsoleKeyInfo((char)0x11, ConsoleKey.Q, false, true, false);
-    }
-
-
-    enum EditorProcessingResults
+    enum KeyProcessingResults
     {
         Running,
         Quit,
-        Queued,
+        Unhandled,
     }
 
     class TemporaryMessage
@@ -101,10 +88,8 @@ namespace txte
                         if (eventType == EventType.Timeout) { continue; }
                         switch (this.ProcessKeyPress(keyInfo))
                         {
-                            case EditorProcessingResults.Quit:
-                                return;
-                            default:
-                                continue;
+                            case KeyProcessingResults.Quit: return;
+                            default: continue;
                         }
                     }
                 }
@@ -136,7 +121,7 @@ namespace txte
             }
         }
 
-        EditorProcessingResults ProcessLoop(InputEventArgs inputEvent)
+        KeyProcessingResults ProcessLoop(InputEventArgs inputEvent)
         {
             var result = this.ProcessKeyPress(inputEvent.ConsoleKeyInfo);
             this.RefreshScreen();
@@ -247,62 +232,128 @@ namespace txte
             }
         }
 
-        EditorProcessingResults ProcessKeyPress(ConsoleKeyInfo key)
+        KeyProcessingResults ProcessKeyPress(ConsoleKeyInfo keyInfo)
         {
-            if (key == SpecialKeys.CtrlQ)
+            var isOptioned =
+                (keyInfo.Modifiers & ConsoleModifiers.Alt) != 0 
+                || (keyInfo.Modifiers & ConsoleModifiers.Control) != 0;
+            var isShifted =
+                (keyInfo.Modifiers & ConsoleModifiers.Shift) != 0;
+            if (isOptioned)
             {
-                return EditorProcessingResults.Quit;
+                if (isShifted)
+                {
+                    return this.ProcessOptionShiftKeyPress(keyInfo);
+                }
+                else
+                {
+                    return this.ProcessOptionKeyPress(keyInfo);
+                }
             }
-            switch (key.Key)
+            else
+            {
+                if (isShifted)
+                {
+                    return this.ProcessShiftKeyPress(keyInfo);
+                }
+                else
+                {
+                    return this.ProcessSingleKeyPress(keyInfo);
+                }
+            }
+
+        }
+
+        KeyProcessingResults ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
+            {
+
+                case ConsoleKey.A:
+                    return this.SwitchAmbiguousWidth();
+
+                default:
+                    return KeyProcessingResults.Unhandled;
+            }
+        }
+
+        KeyProcessingResults ProcessOptionKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
+            {
+                case ConsoleKey.Q:
+                    return KeyProcessingResults.Quit;
+                case ConsoleKey.S:
+                    return this.Save();
+                default:
+                    return KeyProcessingResults.Unhandled;
+            }
+
+        }
+
+        KeyProcessingResults ProcessShiftKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
             {
                 case ConsoleKey.Home:
-                    this.document.MoveHome();
-                    return EditorProcessingResults.Running;
+                    return this.DelegateProcesing(this.document.MoveStartOfFile);
+
                 case ConsoleKey.End:
-                    this.document.MoveEnd();
-                    return EditorProcessingResults.Running;
+                    return this.DelegateProcesing(this.document.MoveEndOfFile);
+
+                default:
+                    if (char.IsControl(keyInfo.KeyChar))
+                    {
+                        return KeyProcessingResults.Unhandled;
+                    }
+                    return this.InsertChar(keyInfo.KeyChar);
+            }
+        }
+
+        KeyProcessingResults ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo.Key)
+            {
+                case ConsoleKey.Home:
+                    return this.DelegateProcesing(this.document.MoveHome);
+
+                case ConsoleKey.End:
+                    return this.DelegateProcesing(this.document.MoveEnd);
 
                 case ConsoleKey.PageUp:
                 case ConsoleKey.PageDown:
-                    return this.MovePage(key.Key);
+                    return this.MovePage(keyInfo.Key);
 
                 case ConsoleKey.UpArrow:
                 case ConsoleKey.DownArrow:
                 case ConsoleKey.LeftArrow:
                 case ConsoleKey.RightArrow:
-                    return this.MoveCursor(key.Key);
+                    return this.MoveCursor(keyInfo.Key);
 
                 case ConsoleKey.Enter:
                     // TODO: implement this
-                    return EditorProcessingResults.Running;
+                    return KeyProcessingResults.Running;
 
                 case ConsoleKey.Backspace:
                     // TODO: implement this
-                    return EditorProcessingResults.Running;
-
-                case ConsoleKey.A:
-                    if ((key.Modifiers & ConsoleModifiers.Alt) != 0)
-                    {
-                        return this.SwitchAmbiguousWidth();
-                    }
-                    goto default;
-                case ConsoleKey.S:
-                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                    {
-                        return this.Save();
-                    }
-                    goto default;
+                    return KeyProcessingResults.Running;
+                        
                 default:
-                    if (char.IsControl(key.KeyChar))
+                    if (char.IsControl(keyInfo.KeyChar))
                     {
-                        return EditorProcessingResults.Running;
+                        return KeyProcessingResults.Unhandled;
                     }
-                    return this.InsertChar(key.KeyChar);
+                    return this.InsertChar(keyInfo.KeyChar);
             }
-
-            
         }
-        EditorProcessingResults Save()
+
+        KeyProcessingResults DelegateProcesing(Action action)
+        {
+            action();
+            return KeyProcessingResults.Running;
+        }
+
+        KeyProcessingResults Save()
         {
             try
             {
@@ -313,15 +364,16 @@ namespace txte
             {
                 this.SetStatusMessage(ex.Message);
             }
-            return EditorProcessingResults.Running;
+            return KeyProcessingResults.Running;
         }
 
-        EditorProcessingResults InsertChar(char c)
+        KeyProcessingResults InsertChar(char c)
         {
             this.document.InsertChar(c, this.setting);
-            return EditorProcessingResults.Running;
+            return KeyProcessingResults.Running;
         }
-        EditorProcessingResults MovePage(ConsoleKey key)
+
+        KeyProcessingResults MovePage(ConsoleKey key)
         {
             switch (key)
             {
@@ -332,10 +384,10 @@ namespace txte
                     this.document.MovePageDown(this.editArea.Height);
                     break;
             }
-            return EditorProcessingResults.Running;
+            return KeyProcessingResults.Running;
         }
 
-        EditorProcessingResults MoveCursor(ConsoleKey key)
+        KeyProcessingResults MoveCursor(ConsoleKey key)
         {
             switch (key)
             {
@@ -352,17 +404,17 @@ namespace txte
                     this.document.MoveDown();
                     break;
             }
-            return EditorProcessingResults.Running;
+            return KeyProcessingResults.Running;
         }
 
-        EditorProcessingResults SwitchAmbiguousWidth()
+        KeyProcessingResults SwitchAmbiguousWidth()
         {
             this.setting.IsFullWidthAmbiguous = !this.setting.IsFullWidthAmbiguous;
             var ambiguousSize =
                 this.setting.IsFullWidthAmbiguous ? "Full Width"
                 : "Half Width";
             this.SetStatusMessage($"East Asian Width / Ambiguous = {ambiguousSize}");
-            return EditorProcessingResults.Running;
+            return KeyProcessingResults.Running;
         }
     }
 }

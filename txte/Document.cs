@@ -227,9 +227,10 @@ namespace txte
                 this.MoveDown();
             }
         }
-        public void MoveBeginOfFile()
+        public void MoveStartOfFile()
         {
             this.valuePosition.X = 0;
+            this.valuePosition.Y = 0;
         }
         public void MoveEndOfFile()
         {
