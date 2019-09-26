@@ -108,7 +108,7 @@ namespace txte
             this.offset = new Point(0, 0);
         }
 
-        public string Path { get; private set; }
+        public string Path { get; set; }
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);

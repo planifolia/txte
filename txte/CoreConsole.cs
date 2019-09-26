@@ -4,7 +4,7 @@ using System.Drawing;
 
 namespace txte
 {
-    class CoreConsole : IConsole
+    class CoreConsole : ConsoleBase
     {
 
         public CoreConsole()
@@ -14,9 +14,9 @@ namespace txte
             this.InitializeColorSettings();
         }
 
-        public int Height => Console.WindowHeight;
-        public int Width => Console.BufferWidth - 1;
-        public Size Size => new Size(this.Width, this.Height);
+        public override int Height => Console.WindowHeight;
+        public override int Width => Console.BufferWidth - 1;
+        public override Size Size => new Size(this.Width, this.Height);
 
         OriginatedColor defaultForegroundColor;
         OriginatedColor defaultBackgroundColor;
@@ -42,20 +42,8 @@ namespace txte
             }
         }
         OriginatedColor _backgroundColor;
-        
 
-        public ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
-
-        public void Clear() => Console.Clear();
-
-        public void ResetColor()
-        {
-            Console.ResetColor();
-            this.ForegroundColor = this.defaultForegroundColor;
-            this.BackgroundColor = this.defaultBackgroundColor;
-        }
-
-        public void RefreshScreen(
+        public override void RefreshScreen(
             EditorSetting setting,
             Action<IScreen> drawEditorRows,
             Action<IScreen> drawSatusBar,
@@ -74,6 +62,17 @@ namespace txte
             Console.SetCursorPosition(cursor.X, cursor.Y);
             Console.CursorVisible = true;
         }
+
+        public override void Clear() => Console.Clear();
+
+        protected override void ResetColor()
+        {
+            Console.ResetColor();
+            this.ForegroundColor = this.defaultForegroundColor;
+            this.BackgroundColor = this.defaultBackgroundColor;
+        }
+
+        protected override ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
 
         void CheckConsoleRequirements()
         {
@@ -103,6 +102,7 @@ namespace txte
             (this.ForegroundColor, this.BackgroundColor) =
                 (this.BackgroundColor, this.ForegroundColor);
         }
+
 
         class Screen : IScreen
         {

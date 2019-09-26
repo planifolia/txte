@@ -29,7 +29,7 @@ namespace txte
 
     class EditorSetting
     {
-        public bool IsFullWidthAmbiguous { get; set; } = true;
+        public bool IsFullWidthAmbiguous { get; set; } = false;
         public int TabSize { get; set; } = 4;
     }
 
@@ -40,13 +40,11 @@ namespace txte
 
         public Editor(IConsole console, EditorSetting setting)
         {
-            this.eventQueue = new EventQueue();
             this.console = console;
             this.setting = setting;
             this.isTriedToQuit = false;
         }
 
-        readonly EventQueue eventQueue;
         readonly IConsole console;
 
         Document document;
@@ -68,74 +66,28 @@ namespace txte
 
         public async Task Run()
         {
-            using (var cancellationController = new CancellationTokenSource())
+            while (true)
             {
-                try
+                this.RefreshScreen();
+                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
+                if (eventType == EventType.Timeout) { continue; }
+                switch (await this.ProcessKeyPress(keyInfo))
                 {
-                    var userInput = GenerateEventAsync(
-                        EventType.UserAction,
-                        this.ReadKeyAsync,
-                        cancellationController.Token
-                    );
-                    var timeout = GenerateEventAsync(
-                        EventType.Timeout,
-                        this.TimeOutAsync,
-                        cancellationController.Token
-                    );
-                    
-                    while (true)
-                    {
-                        this.RefreshScreen();
-                        (var eventType, var keyInfo) = await this.eventQueue.RecieveReadKeyEventAsync();
-                        if (eventType == EventType.Timeout) { continue; }
-                        switch (this.ProcessKeyPress(keyInfo))
+                    case KeyProcessingResults.Quit:
+                        if (this.isTriedToQuit || !this.document.IsModified)
                         {
-                            case KeyProcessingResults.Quit:
-                                if (this.isTriedToQuit || !this.document.IsModified)
-                                {
-                                    return;
-                                }
-                                else
-                                {
-                                    this.isTriedToQuit = true;
-                                    this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
-                                    break;
-                                }
-                            default:
-                                this.isTriedToQuit = false;
-                                continue;
+                            return;
                         }
-                    }
+                        else
+                        {
+                            this.isTriedToQuit = true;
+                            this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
+                            break;
+                        }
+                    default:
+                        this.isTriedToQuit = false;
+                        continue;
                 }
-                finally
-                {
-                    cancellationController.Cancel();
-                }
-            }
-        }
-
-        async Task<ConsoleKeyInfo> TimeOutAsync()
-        {
-            await Task.Delay(1000);
-            return default;
-        }
-        async Task<ConsoleKeyInfo> ReadKeyAsync()
-        {
-            await Task.Yield();
-            return this.console.ReadKey();
-        }
-
-        async Task GenerateEventAsync(
-            EventType eventType,
-            Func<Task<ConsoleKeyInfo>> inputGenerator,
-            CancellationToken cancellationToken
-        )
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var keyInfo = await inputGenerator();
-                if (cancellationToken.IsCancellationRequested) { return; }
-                this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo));
             }
         }
 
@@ -244,20 +196,50 @@ namespace txte
             }
         }
 
-        KeyProcessingResults ProcessKeyPress(ConsoleKeyInfo keyInfo)
+        async Task<string?> Prompt(string promptPrefix, string promptSuffix)
+        {
+            var input = new StringBuilder();
+
+            EventType prevEventType = EventType.UserAction;
+            while (true)
+            {
+                this.SetStatusMessage($"{promptPrefix}{input.ToString()}{promptSuffix}");
+                if (prevEventType != EventType.Timeout) { this.RefreshScreen(); }
+
+                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
+                prevEventType = eventType;
+                if (eventType == EventType.Timeout) continue;
+                switch (keyInfo)
+                {
+                    case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
+                        input.Length = Math.Max(input.Length - 1, 0);
+                        break;
+                    case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
+                        return null;
+                    case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
+                        return input.ToString();
+                    default:
+                        if (!char.IsControl(keyInfo.KeyChar))
+                        { 
+                            input.Append(keyInfo.KeyChar);
+                        }
+                        break;
+                }
+            }
+        }
+
+        async Task<KeyProcessingResults> ProcessKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Modifiers)
             {
                 case ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift:
-                    return this.ProcessExOptionShiftKeyPress(keyInfo);
-                case ConsoleModifiers.Control | ConsoleModifiers.Alt:
-                    return this.ProcessExOptionKeyPress(keyInfo);
                 case ConsoleModifiers.Control | ConsoleModifiers.Shift:
                 case ConsoleModifiers.Alt | ConsoleModifiers.Shift:
                     return this.ProcessOptionShiftKeyPress(keyInfo);
+                case ConsoleModifiers.Control | ConsoleModifiers.Alt:
                 case ConsoleModifiers.Control:
                 case ConsoleModifiers.Alt:
-                    return this.ProcessOptionKeyPress(keyInfo);
+                    return await this.ProcessOptionKeyPress(keyInfo);
                 case ConsoleModifiers.Shift:
                     return this.ProcessShiftKeyPress(keyInfo);
                 default:
@@ -265,48 +247,30 @@ namespace txte
             }
         }
 
-        KeyProcessingResults ProcessExOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
+        KeyProcessingResults ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Key)
             {
-                default:
-                    return KeyProcessingResults.Unhandled;
-            }
-        }
-
-        KeyProcessingResults ProcessExOptionKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.A:
+                case ConsoleKey.E:
                     return this.SwitchAmbiguousWidth();
 
                 default:
                     return KeyProcessingResults.Unhandled;
             }
-
         }
 
-        KeyProcessingResults ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
+        async Task<KeyProcessingResults> ProcessOptionKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Key)
             {
-                default:
-                    return KeyProcessingResults.Unhandled;
-            }
-        }
+                case ConsoleKey.Q:
+                    return KeyProcessingResults.Quit;
 
-        KeyProcessingResults ProcessOptionKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
-            {
                 case ConsoleKey.L:
                     return this.DelegateProcessing(this.console.Clear);
-                case ConsoleKey.Q:
-                    
-                    return KeyProcessingResults.Quit;
+
                 case ConsoleKey.S:
-                    return this.Save();
+                    return await this.Save();
 
                 default:
                     return KeyProcessingResults.Unhandled;
@@ -373,10 +337,17 @@ namespace txte
             return KeyProcessingResults.Running;
         }
 
-        KeyProcessingResults Save()
+        async Task<KeyProcessingResults> Save()
         {
             try
             {
+                var savePath = this.document.Path ?? await this.Prompt("Save as:", "");
+                if (savePath == null)
+                {
+                    this.SetStatusMessage("Save cancelled");
+                    return KeyProcessingResults.Running;
+                }
+                this.document.Path = savePath;
                 this.document.Save();
                 this.SetStatusMessage("File is saved");
             }

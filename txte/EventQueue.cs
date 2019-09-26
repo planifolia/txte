@@ -48,7 +48,7 @@ namespace txte
             {
                 if (this.queue.Count != 0)
                 {
-                    if (eventArgs.EventType != EventType.Timeout)
+                    if (eventArgs.EventType == EventType.Timeout)
                     {
                         return;
                     }
