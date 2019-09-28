@@ -9,6 +9,35 @@ using System.Threading.Tasks;
 
 namespace txte
 {
+    class NewLineFormat
+    {
+        public static readonly NewLineFormat LF = new NewLineFormat("LF", "\n");
+        public static readonly NewLineFormat CR = new NewLineFormat("CR", "\r");
+        public static readonly NewLineFormat CRLF = new NewLineFormat("CRLF", "\r\n");
+
+        public static NewLineFormat FromSequence(string sequence) => 
+            sequence switch
+            {
+                "\n" => NewLineFormat.LF,
+                "\r" => NewLineFormat.CR,
+                "\r\n" => NewLineFormat.CRLF,
+                _ => throw new Exception($"The new line format is not supported: {NewLineFormat.ToHexadecimals(sequence)}({sequence.Length} chars)"),
+            };
+        static string ToHexadecimals(string sequence) =>
+            string.Concat(sequence.Select(x => $"0x{(int)x:X}"));
+
+        public string Name { get; }
+        public string Sequence { get; }
+
+        public override string ToString() => this.Sequence;
+
+        private NewLineFormat(string name, string sequence)
+        {
+            this.Name = name;
+            this.Sequence = sequence;
+        }
+    }
+
     class Row
     {
         public Row(string value) : this(value, false) {}
@@ -87,32 +116,39 @@ namespace txte
             {
                 Path = path
             };
-            using (var reader = new StreamReader(path, Encoding.UTF8))
+
+            using var reader = new StreamReader(path, Encoding.UTF8);
+            var text = await reader.ReadToEndAsync();
+            var newLine = AnyNewLinePattern.Match(text);
+            if (newLine.Success) {
+                doc.NewLineFormat = NewLineFormat.FromSequence(newLine.Value);
+            }
+            var lines = AnyNewLinePattern.Split(text);
+            foreach (var line in lines)
             {
-                var text = await reader.ReadToEndAsync();
-                var lines = Regex.Split(text, @"\r\n|\r|\n");
-                foreach (var line in lines)
-                {
-                    doc.Rows.Add(new Row(line));
-                }
-                foreach (var row in doc.Rows)
-                {
-                    row.UpdateRender(setting);
-                }
+                doc.Rows.Add(new Row(line));
+            }
+            foreach (var row in doc.Rows)
+            {
+                row.UpdateRender(setting);
             }
 
             return doc;
         }
 
+        static readonly Regex AnyNewLinePattern = new Regex(@"\r\n|\r|\n");
+
         public Document()
         {
             this.Path = null;
+            this.NewLineFormat = NewLineFormat.FromSequence(Environment.NewLine);
             this.Rows = new List<Row> { };
             this.valuePosition = new Point(0, 0);
             this.offset = new Point(0, 0);
         }
 
         public string? Path { get; set; }
+        public NewLineFormat NewLineFormat { get; set; }
         public bool IsUntouched => this.Rows.Count == 0;
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
@@ -134,7 +170,7 @@ namespace txte
                 foreach (var row in this.Rows)
                 {
                     file.Write(row.Value);
-                    if (rowCount != this.Rows.Count - 1) { file.WriteLine(); }
+                    if (rowCount != this.Rows.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
                     row.Establish();
                     rowCount++;
                 }

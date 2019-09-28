@@ -47,7 +47,7 @@ namespace txte
         }
 
         readonly IConsole console;
-        readonly List<TemporaryMessage> statusMessage = new List<TemporaryMessage>();
+        readonly List<TemporaryMessage> messages = new List<TemporaryMessage>();
 
         Document document;
         EditorSetting setting;
@@ -56,7 +56,7 @@ namespace txte
         Size editArea => 
             new Size(
                 this.console.Size.Width,
-                this.console.Size.Height - this.statusMessage.Count - 1
+                this.console.Size.Height - this.messages.Count - 1
             );
 
         public void SetDocument(Document document)
@@ -64,19 +64,19 @@ namespace txte
             this.document = document;
         }
 
-        public void SetStatusMessage(string value)
+        public void AddMessage(string value)
         {
-            this.statusMessage.Add(new TemporaryMessage(value, DateTime.Now));
+            this.messages.Add(new TemporaryMessage(value, DateTime.Now));
         }
 
         IEnumerable<TemporaryMessage> DiscardMessages()
         {
             var now = DateTime.Now;
             var expireds = 
-                this.statusMessage.Where(x => now - x.Time > TimeSpan.FromSeconds(5)).ToArray();
+                this.messages.Where(x => now - x.Time > TimeSpan.FromSeconds(5)).ToArray();
             foreach (var x in expireds)
             {
-                this.statusMessage.Remove(x);
+                this.messages.Remove(x);
             }
             return expireds;
         }
@@ -98,7 +98,7 @@ namespace txte
                             else
                             {
                                 this.isTriedToQuit = true;
-                                this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
+                                this.AddMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
                                 break;
                             }
                         default:
@@ -112,7 +112,7 @@ namespace txte
                     var editAreaHeight = this.editArea.Height;
                     if (this.DiscardMessages().Any())
                     {
-                        this.RefreshScreen(editAreaHeight);
+                        this.RefreshScreen(Math.Max(editAreaHeight, 0));
                     }
 
                 }
@@ -206,14 +206,14 @@ namespace txte
             (var clippedFileName, _, _) = 
                 fileName.SubConsoleString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
-            var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X}";
+            var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
             screen.AppendRow(fileInfo + new string(' ', padding) + positionInfo);
         }
         void DrawMessageBar(IScreen screen)
         {
-            foreach (var message in this.statusMessage)
+            foreach (var message in this.messages)
             {
                 var text = message.Value;
                 var textLength = Math.Min(text.Length, this.console.Width);
@@ -228,7 +228,7 @@ namespace txte
             EventType prevEventType = EventType.UserAction;
             while (true)
             {
-                this.SetStatusMessage($"{promptPrefix}{input.ToString()}{promptSuffix}");
+                this.AddMessage($"{promptPrefix}{input.ToString()}{promptSuffix}");
                 if (prevEventType != EventType.Timeout) { this.RefreshScreen(this.editArea.Height); }
 
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
@@ -369,16 +369,16 @@ namespace txte
                 var savePath = this.document.Path ?? await this.Prompt("Save as:", "");
                 if (savePath == null)
                 {
-                    this.SetStatusMessage("Save cancelled");
+                    this.AddMessage("Save cancelled");
                     return KeyProcessingResults.Running;
                 }
                 this.document.Path = savePath;
                 this.document.Save();
-                this.SetStatusMessage("File is saved");
+                this.AddMessage("File is saved");
             }
             catch (IOException ex)
             {
-                this.SetStatusMessage(ex.Message);
+                this.AddMessage(ex.Message);
             }
             return KeyProcessingResults.Running;
         }
@@ -429,7 +429,7 @@ namespace txte
             var ambiguousSize =
                 this.setting.IsFullWidthAmbiguous ? "Full Width"
                 : "Half Width";
-            this.SetStatusMessage($"East Asian Width / Ambiguous = {ambiguousSize}");
+            this.AddMessage($"East Asian Width / Ambiguous = {ambiguousSize}");
             return KeyProcessingResults.Running;
         }
     }

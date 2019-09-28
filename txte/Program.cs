@@ -23,7 +23,7 @@ namespace txte
                     : new Document();
                 var editor = new Editor(console, setting);
                 editor.SetDocument(document);
-                editor.SetStatusMessage("HELP: Ctrl-Q to quit, Shift-Ctrl-E to switch EAW ambiguous width...");
+                editor.AddMessage("HELP: Ctrl-Q to quit, Shift-Ctrl-E to switch EAW ambiguous width...");
                 await editor.Run();
                 return 0;
             }
