@@ -19,7 +19,7 @@ namespace txte
                 
                 var setting = new EditorSetting();
                 var document =
-                    (arguments.Length >= 1) ? Document.Open(arguments[0], setting)
+                    (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
                     : new Document();
                 var editor = new Editor(console, setting);
                 editor.SetDocument(document);

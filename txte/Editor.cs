@@ -176,7 +176,7 @@ namespace txte
 
         void DrawOutofBounds(IScreen screen, int y)
         {
-            if (this.document.Rows.Count == 0 && y == this.editArea.Height / 3)
+            if (this.document.IsUntouched && y == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = Math.Min(welcome.Length, this.console.Width);

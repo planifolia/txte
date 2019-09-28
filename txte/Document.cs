@@ -4,6 +4,8 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace txte
 {
@@ -79,7 +81,7 @@ namespace txte
 
     class Document
     {
-        public static Document Open(string path, EditorSetting setting)
+        public static async Task<Document> OpenAsync(string path, EditorSetting setting)
         {
             var doc = new Document
             {
@@ -87,7 +89,9 @@ namespace txte
             };
             using (var reader = new StreamReader(path, Encoding.UTF8))
             {
-                while (reader.ReadLine() is var line && line != null)
+                var text = await reader.ReadToEndAsync();
+                var lines = Regex.Split(text, @"\r\n|\r|\n");
+                foreach (var line in lines)
                 {
                     doc.Rows.Add(new Row(line));
                 }
@@ -108,7 +112,8 @@ namespace txte
             this.offset = new Point(0, 0);
         }
 
-        public string Path { get; set; }
+        public string? Path { get; set; }
+        public bool IsUntouched => this.Rows.Count == 0;
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
@@ -125,10 +130,13 @@ namespace txte
             if (this.Path == null) { return; }
             using (var file = new StreamWriter(this.Path, false, Encoding.UTF8))
             {
+                int rowCount = 0;
                 foreach (var row in this.Rows)
                 {
-                    file.WriteLine(row.Value);
+                    file.Write(row.Value);
+                    if (rowCount != this.Rows.Count - 1) { file.WriteLine(); }
                     row.Establish();
+                    rowCount++;
                 }
             }
         }
@@ -188,6 +196,7 @@ namespace txte
                 else if (position.Y == this.Rows.Count)
                 {
                     // Only back cursor if at the end of file.
+                    // Maybe this condition cannot be met.
                 }
                 else
                 {
@@ -210,7 +219,12 @@ namespace txte
 
         public void DeleteChar(EditorSetting setting)
         {
-            if (this.valuePosition.Y == this.Rows.Count) { return; }
+            if (this.IsUntouched) { return; }
+            if (this.valuePosition.Y == this.Rows.Count - 1 
+                && this.valuePosition.X == this.Rows[^1].Value.Length)
+            {
+                return;
+            }
 
             this.MoveRight();
             this.BackSpace(setting);
@@ -265,15 +279,21 @@ namespace txte
         }
         void ClampPosition()
         {
-            if (this.valuePosition.Y < this.Rows.Count)
+            if (this.IsUntouched)
+            {
+                this.valuePosition.X = 0;
+                this.valuePosition.Y = 0;
+            }
+            else if (this.valuePosition.Y < this.Rows.Count)
             {
                 var row = this.Rows[this.valuePosition.Y];
                 if (this.valuePosition.X > row.Value.Length) { this.valuePosition.X = row.Value.Length; }
             }
             else
             {
-                this.valuePosition.X = 0;
-                this.valuePosition.Y = this.Rows.Count;
+                this.valuePosition.Y = this.Rows.Count - 1;
+                var row = this.Rows[this.valuePosition.Y];
+                this.valuePosition.X = row.Value.Length;
             }
         }
 
