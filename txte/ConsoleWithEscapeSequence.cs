@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace txte
 {
-    class ConsoleWithEscapeSequence : ConsoleBase
+    class ConsoleWithEscapeSequence : IConsole
     {
         const int STD_OUTPUT_HANDLE = -11;
         const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
@@ -28,13 +29,19 @@ namespace txte
         {
             this.CheckConsoleRequirements();
             this.SetupConsoleMode();
+            this.keyReader = new CoreConsoleKeyReader();
         }
 
-        public override int Height => Console.WindowHeight;
-        public override int Width => Console.BufferWidth;
-        public override Size Size => new Size(this.Width, this.Height);
+        public int Height => Console.WindowHeight;
+        public int Width => Console.BufferWidth;
+        public Size Size => new Size(this.Width, this.Height);
 
-        public override void RefreshScreen(
+        readonly CoreConsoleKeyReader keyReader;
+
+        public async Task<InputEventArgs> ReadKeyOrTimeoutAsync()
+            => await this.keyReader.ReadKeyOrTimeoutAsync();
+
+        public void RefreshScreen(
             int from,
             EditorSetting setting,
             Action<IScreen, int> drawEditorRows,
@@ -57,18 +64,16 @@ namespace txte
             this.Write(buffer.ToString());
         }
 
-        public override void Clear()
+        public void Clear()
         {
             this.Write("\x1b[2J"); // Console.Clear();
             this.Write("\x1b[H"); // Console.SetCursorPosition(0, 0);
         }
 
-        protected override void ResetColor()
+        void ResetColor()
         {
             this.Write("\x1b[m");
         }
-
-        protected override ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
 
         void CheckConsoleRequirements()
         {
@@ -99,7 +104,6 @@ namespace txte
         }
 
         void Write(string value) => Console.Write(value);
-
 
         class Buffer : IScreen
         {
@@ -189,5 +193,36 @@ namespace txte
 
             void AppendNewLine() => this.buffer.Append("\r\n");
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // 重複する呼び出しを検出するには
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.disposedValue)
+            {
+                if (disposing) { }
+
+                this.ResetColor();
+                this.Clear();
+
+                this.keyReader.Dispose();
+
+                this.disposedValue = true;
+            }
+        }
+
+        ~ConsoleWithEscapeSequence()
+        {
+          // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+          Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

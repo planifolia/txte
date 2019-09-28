@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Threading.Tasks;
 
 namespace txte
 {
-    class CoreConsole : ConsoleBase
+    class CoreConsole : IConsole
     {
 
         public CoreConsole()
@@ -12,11 +13,14 @@ namespace txte
             this.CheckConsoleRequirements();
             this.SetupConsoleMode();
             this.InitializeColorSettings();
+            this.keyReader = new CoreConsoleKeyReader();
         }
 
-        public override int Height => Console.WindowHeight;
-        public override int Width => Console.BufferWidth - 1;
-        public override Size Size => new Size(this.Width, this.Height);
+        public int Height => Console.WindowHeight;
+        public int Width => Console.BufferWidth - 1;
+        public Size Size => new Size(this.Width, this.Height);
+
+        readonly CoreConsoleKeyReader keyReader;
 
         OriginatedColor defaultForegroundColor;
         OriginatedColor defaultBackgroundColor;
@@ -43,7 +47,11 @@ namespace txte
         }
         OriginatedColor _backgroundColor;
 
-        public override void RefreshScreen(
+
+        public async Task<InputEventArgs> ReadKeyOrTimeoutAsync()
+            => await this.keyReader.ReadKeyOrTimeoutAsync();
+
+        public void RefreshScreen(
             int from,
             EditorSetting setting,
             Action<IScreen, int> drawEditorRows,
@@ -64,16 +72,15 @@ namespace txte
             Console.CursorVisible = true;
         }
 
-        public override void Clear() => Console.Clear();
+        public void Clear() => Console.Clear();
 
-        protected override void ResetColor()
+        void ResetColor()
         {
             Console.ResetColor();
             this.ForegroundColor = this.defaultForegroundColor;
             this.BackgroundColor = this.defaultBackgroundColor;
         }
 
-        protected override ConsoleKeyInfo ReadKey() => Console.ReadKey(true);
 
         void CheckConsoleRequirements()
         {
@@ -260,5 +267,35 @@ namespace txte
                 }
             }
         }
+        
+        #region IDisposable Support
+        bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.disposedValue)
+            {
+                if (disposing) { }
+
+                this.ResetColor();
+                this.Clear();
+
+                this.keyReader.Dispose();
+
+                this.disposedValue = true;
+            }
+        }
+
+        ~CoreConsole()
+        {
+            this.Dispose(false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }
