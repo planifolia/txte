@@ -14,8 +14,9 @@ namespace txte
 
         Task<InputEventArgs> ReadKeyOrTimeoutAsync();
         void RefreshScreen(
+            int from,
             EditorSetting setting,
-            Action<IScreen> drawEditorRows,
+            Action<IScreen, int> drawEditorRows,
             Action<IScreen> drawStatusBar,
             Action<IScreen> drawMessageBar,
             Point cursor);
@@ -50,8 +51,9 @@ namespace txte
             await this.eventQueue.RecieveReadKeyEventAsync();
 
         public abstract void RefreshScreen(
+            int from,
             EditorSetting setting,
-            Action<IScreen> drawEditorRows,
+            Action<IScreen, int> drawEditorRows,
             Action<IScreen> drawStatusBar,
             Action<IScreen> drawMessageBar,
             Point cursor);

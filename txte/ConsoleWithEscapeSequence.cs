@@ -35,17 +35,18 @@ namespace txte
         public override Size Size => new Size(this.Width, this.Height);
 
         public override void RefreshScreen(
+            int from,
             EditorSetting setting,
-            Action<IScreen> drawEditorRows,
+            Action<IScreen, int> drawEditorRows,
             Action<IScreen> drawSatusBar,
             Action<IScreen> drawMessageBar,
             Point cursor)
         {
-            var buffer = new Buffer(this, setting.IsFullWidthAmbiguous);
+            var buffer = new Buffer(this, from, setting.IsFullWidthAmbiguous);
 
             buffer.HideCursor();
-            buffer.SetCursorPositionZero();
-            drawEditorRows(buffer);
+            buffer.SetCursorPosition(new Point(0, from));
+            drawEditorRows(buffer, from);
             buffer.ReverseColor();
             drawSatusBar(buffer);
             buffer.ResetColor();
@@ -102,14 +103,14 @@ namespace txte
 
         class Buffer : IScreen
         {
-            public Buffer(ConsoleWithEscapeSequence console, bool ambuguosIsfullWidth)
+            public Buffer(ConsoleWithEscapeSequence console, int from, bool ambuguosIsfullWidth)
             {
                 this.buffer = new StringBuilder();
                 this.console = console;
                 this.size = console.Size;
                 this.ambuguosIsfullWidth = ambuguosIsfullWidth;
 
-                this.rowCount = 0;
+                this.rowCount = from;
             }
             readonly StringBuilder buffer;
             readonly ConsoleWithEscapeSequence console;

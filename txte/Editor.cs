@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -46,13 +47,17 @@ namespace txte
         }
 
         readonly IConsole console;
+        readonly List<TemporaryMessage> statusMessage = new List<TemporaryMessage>();
 
         Document document;
-        TemporaryMessage statusMessage;
         EditorSetting setting;
         private bool isTriedToQuit;
 
-        Size editArea => new Size(this.console.Size.Width, this.console.Size.Height - 2);
+        Size editArea => 
+            new Size(
+                this.console.Size.Width,
+                this.console.Size.Height - this.statusMessage.Count - 1
+            );
 
         public void SetDocument(Document document)
         {
@@ -61,40 +66,64 @@ namespace txte
 
         public void SetStatusMessage(string value)
         {
-            this.statusMessage = new TemporaryMessage(value, DateTime.Now);
+            this.statusMessage.Add(new TemporaryMessage(value, DateTime.Now));
+        }
+
+        IEnumerable<TemporaryMessage> DiscardMessages()
+        {
+            var now = DateTime.Now;
+            var expireds = 
+                this.statusMessage.Where(x => now - x.Time > TimeSpan.FromSeconds(5)).ToArray();
+            foreach (var x in expireds)
+            {
+                this.statusMessage.Remove(x);
+            }
+            return expireds;
         }
 
         public async Task Run()
         {
+            this.RefreshScreen(0);
             while (true)
             {
-                this.RefreshScreen();
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                if (eventType == EventType.Timeout) { continue; }
-                switch (await this.ProcessKeyPress(keyInfo))
-                {
-                    case KeyProcessingResults.Quit:
-                        if (this.isTriedToQuit || !this.document.IsModified)
-                        {
-                            return;
-                        }
-                        else
-                        {
-                            this.isTriedToQuit = true;
-                            this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
+                if (eventType == EventType.UserAction) {
+                    switch (await this.ProcessKeyPress(keyInfo))
+                    {
+                        case KeyProcessingResults.Quit:
+                            if (this.isTriedToQuit || !this.document.IsModified)
+                            {
+                                return;
+                            }
+                            else
+                            {
+                                this.isTriedToQuit = true;
+                                this.SetStatusMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
+                                break;
+                            }
+                        default:
+                            this.isTriedToQuit = false;
                             break;
-                        }
-                    default:
-                        this.isTriedToQuit = false;
-                        continue;
+                    }
+                    this.RefreshScreen(0);
+                }
+                else
+                {
+                    var editAreaHeight = this.editArea.Height;
+                    if (this.DiscardMessages().Any())
+                    {
+                        this.RefreshScreen(editAreaHeight);
+                    }
+
                 }
             }
         }
 
-        void RefreshScreen()
+        void RefreshScreen(int from)
         {
             this.document.UpdateOffset(this.editArea, this.setting);
             this.console.RefreshScreen(
+                from,
                 this.setting,
                 this.DrawEditorRows,
                 this.DrawSatausBar,
@@ -102,10 +131,10 @@ namespace txte
                 this.document.Cursor);
         }
 
-        void DrawEditorRows(IScreen screen)
+        void DrawEditorRows(IScreen screen, int from)
         {
             bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
-            for (int y = 0; y < this.editArea.Height; y++)
+            for (int y = from; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
                 if (docRow < this.document.Rows.Count)
@@ -184,15 +213,11 @@ namespace txte
         }
         void DrawMessageBar(IScreen screen)
         {
-            if (DateTime.Now - this.statusMessage.Time < TimeSpan.FromSeconds(5))
+            foreach (var message in this.statusMessage)
             {
-                var text = this.statusMessage.Value;
+                var text = message.Value;
                 var textLength = Math.Min(text.Length, this.console.Width);
                 screen.AppendRow(text.Substring(0, textLength));
-            }
-            else
-            {
-                screen.AppendRow("");
             }
         }
 
@@ -204,7 +229,7 @@ namespace txte
             while (true)
             {
                 this.SetStatusMessage($"{promptPrefix}{input.ToString()}{promptSuffix}");
-                if (prevEventType != EventType.Timeout) { this.RefreshScreen(); }
+                if (prevEventType != EventType.Timeout) { this.RefreshScreen(this.editArea.Height); }
 
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 prevEventType = eventType;

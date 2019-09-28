@@ -44,17 +44,18 @@ namespace txte
         OriginatedColor _backgroundColor;
 
         public override void RefreshScreen(
+            int from,
             EditorSetting setting,
-            Action<IScreen> drawEditorRows,
+            Action<IScreen, int> drawEditorRows,
             Action<IScreen> drawSatusBar,
             Action<IScreen> drawMessageBar,
             Point cursor)
         {
-            var screen = new Screen(this, setting.IsFullWidthAmbiguous);
+            var screen = new Screen(this, from, setting.IsFullWidthAmbiguous);
 
             Console.CursorVisible = false;
-            Console.SetCursorPosition(0, 0);
-            drawEditorRows(screen);
+            Console.SetCursorPosition(0, from);
+            drawEditorRows(screen, from);
             this.ReverseColor();
             drawSatusBar(screen);
             this.ResetColor();
@@ -106,11 +107,11 @@ namespace txte
 
         class Screen : IScreen
         {
-            public Screen(CoreConsole console, bool ambuguosIsfullWidth)
+            public Screen(CoreConsole console, int from, bool ambuguosIsfullWidth)
             {
                 this.console = console;
                 this.size = console.Size;
-                this.rowCount = 0;
+                this.rowCount = from;
                 this.ambuguosIsfullWidth = ambuguosIsfullWidth;
             }
 
