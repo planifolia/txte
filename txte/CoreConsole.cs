@@ -54,20 +54,14 @@ namespace txte
         public void RefreshScreen(
             int from,
             EditorSetting setting,
-            Action<IScreen, int> drawEditorRows,
-            Action<IScreen> drawSatusBar,
-            Action<IScreen> drawMessageBar,
+            Action<IScreen, int> RenderScreen,
             Point cursor)
         {
             var screen = new Screen(this, from, setting.IsFullWidthAmbiguous);
 
             Console.CursorVisible = false;
             Console.SetCursorPosition(0, from);
-            drawEditorRows(screen, from);
-            this.ReverseColor();
-            drawSatusBar(screen);
-            this.ResetColor();
-            drawMessageBar(screen);
+            RenderScreen(screen, from);
             Console.SetCursorPosition(cursor.X, cursor.Y);
             Console.CursorVisible = true;
         }

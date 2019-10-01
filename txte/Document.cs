@@ -9,11 +9,14 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    class NewLineFormat
+    class NewLineFormat : IChoice
     {
-        public static readonly NewLineFormat LF = new NewLineFormat("LF", "\n");
-        public static readonly NewLineFormat CR = new NewLineFormat("CR", "\r");
-        public static readonly NewLineFormat CRLF = new NewLineFormat("CRLF", "\r\n");
+        public static readonly NewLineFormat LF = new NewLineFormat("LF", "\n", 'l');
+        public static readonly NewLineFormat CR = new NewLineFormat("CR", "\r", 'm');
+        public static readonly NewLineFormat CRLF = new NewLineFormat("CRLF", "\r\n", 'w');
+
+        public static readonly IReadOnlyList<NewLineFormat> All =
+            new NewLineFormat[] { LF, CR, CRLF };
 
         public static NewLineFormat FromSequence(string sequence) => 
             sequence switch
@@ -29,12 +32,15 @@ namespace txte
         public string Name { get; }
         public string Sequence { get; }
 
+        public char Shortcut { get; }
+
         public override string ToString() => this.Sequence;
 
-        private NewLineFormat(string name, string sequence)
+        private NewLineFormat(string name, string sequence, char shortcut)
         {
             this.Name = name;
             this.Sequence = sequence;
+            this.Shortcut = shortcut;
         }
     }
 

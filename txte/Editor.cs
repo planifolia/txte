@@ -4,11 +4,65 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace txte
 {
+    class TemporaryValue<T>
+    {
+        public TemporaryValue()
+        {
+            this.value = default!;
+        }
+
+        public bool HasValue { get; private set; }
+        public T Value => this.HasValue ? this.value : throw new InvalidOperationException();
+
+        T value;
+
+        public DisposingToken SetTemporary(T value)
+        {
+            this.HasValue = true;
+            this.value = value;
+            return new DisposingToken(this);
+        }
+
+        public class DisposingToken : IDisposable
+        {
+            public DisposingToken(TemporaryValue<T> source)
+            {
+                this.source = source;
+            }
+
+            TemporaryValue<T> source;
+
+            #region IDisposable Support
+            private bool disposedValue = false;
+
+            protected virtual void Dispose(bool disposing)
+            {
+                if (!this.disposedValue)
+                {
+                    if (disposing)
+                    {
+                        this.source.HasValue = false;
+                        this.source.value = default!;
+                    }
+
+                    this.source = null!;
+
+                    disposedValue = true;
+                }
+            }
+
+            public void Dispose()
+            {
+                Dispose(true);
+            }
+            #endregion
+        }
+    }
+
     enum KeyProcessingResults
     {
         Running,
@@ -28,6 +82,168 @@ namespace txte
         public DateTime Time { get; }
     }
 
+    interface IPrompt
+    {
+        IEnumerable<StyledString> ToStyledString();
+    }
+
+    interface IChoice
+    {
+        string Name { get; }
+        char Shortcut { get; } 
+    }
+
+    class Choice : IChoice
+    {
+        public Choice(string name, char shortcut)
+        {
+            this.Name = name;
+            this.Shortcut = shortcut;
+        }
+        public string Name { get; }
+        public char Shortcut { get; } 
+    }
+
+    class ChoosePromptInfo : IPrompt
+    {
+        public ChoosePromptInfo(string message, IReadOnlyList<IChoice> choices, IChoice? default_choice = null)
+        {
+            this.message = message;
+            this.choices = choices;
+            if (default_choice == null)
+            {
+                this.choosenIndex = 0;
+            }
+            else
+            {
+                this.choosenIndex = 
+                    this.choices
+                    .Select((c, i) => (c, i))
+                    .Where(x => x.c == default_choice)
+                    .Select(x => x.i)
+                    .First();
+            }
+        }
+
+        readonly string message;
+        readonly IReadOnlyList<IChoice> choices;
+        int choosenIndex;
+
+        public IChoice Choosen => this.choices[this.choosenIndex];
+
+        public (KeyProcessingResults, IChoice?) ProcessKey(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo)
+            {
+                case { Key: ConsoleKey.LeftArrow, Modifiers: (ConsoleModifiers)0 }:
+                    this.MoveLeft();
+                    return (KeyProcessingResults.Running, default);
+                case { Key: ConsoleKey.RightArrow, Modifiers: (ConsoleModifiers)0 }:
+                    this.MoveRight();
+                    return (KeyProcessingResults.Running, default);
+                case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
+                    return (KeyProcessingResults.Quit, default);
+                case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
+                    return (KeyProcessingResults.Quit, this.Choosen);
+                default:
+                    if (this.AcceptShortcut(keyInfo.KeyChar) is { } choosen)
+                    {
+                        return (KeyProcessingResults.Quit, choosen);
+                    }
+                    else
+                    {
+                    return (KeyProcessingResults.Running, default);
+                    }
+            }
+        }
+
+        public IEnumerable<StyledString> ToStyledString()
+        {
+            var styled = new List<StyledString>();
+            styled.Add(new StyledString(this.message, ColorSet.PromptMessage));
+            styled.Add(new StyledString(" "));
+            var choiceCount = this.choices.Count;
+            for (int i = 0; i < choiceCount; i++)
+            {
+                if (i != 0) {
+                    styled.Add(new StyledString(" / "));
+                }
+                var colorSet = (i == this.choosenIndex) ? ColorSet.Reversed : ColorSet.Default;
+                styled.Add(new StyledString(
+                    $"{this.choices[i].Name}({this.choices[i].Shortcut})",
+                    colorSet
+                ));
+            }
+            return styled;
+        }
+
+        void MoveLeft()
+        {
+            var choiceCount = this.choices.Count;
+            this.choosenIndex = (this.choosenIndex - 1 + choiceCount) % choiceCount;
+        }
+        void MoveRight()
+        {
+            var choiceCount = this.choices.Count;
+            this.choosenIndex = (this.choosenIndex + 1) % choiceCount;
+        }
+
+        IChoice? AcceptShortcut(char keyChar)
+        {
+            foreach (var choice in this.choices)
+            {
+                if (choice.Shortcut ==keyChar) { return choice; }
+            }
+            
+            return null;
+        }
+    }
+
+    class InputPromptInfo : IPrompt
+    {
+        public InputPromptInfo(string message)
+        {
+            this.Message = message;
+            this.input = new StringBuilder();
+        }
+
+        public string Message { get; }
+
+        private StringBuilder input;
+
+        public string Current => this.input.ToString();
+
+        public (KeyProcessingResults, string?) ProcessKey(ConsoleKeyInfo keyInfo)
+        {
+            switch (keyInfo)
+            {
+                case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
+                    input.Length = (input.Length - 1).AtMin(0);
+                    return (KeyProcessingResults.Running, default);
+                case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
+                    return (KeyProcessingResults.Quit, default);
+                case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
+                    return (KeyProcessingResults.Quit, input.ToString());
+                default:
+                    if (!char.IsControl(keyInfo.KeyChar))
+                    { 
+                        input.Append(keyInfo.KeyChar);
+                    }
+                    return (KeyProcessingResults.Running, default);
+            }
+        }
+
+        public IEnumerable<StyledString> ToStyledString()
+        {
+            var styled = new List<StyledString>();
+            styled.Add(new StyledString(this.Message, ColorSet.PromptMessage));
+            styled.Add(new StyledString(" "));
+            styled.Add(new StyledString(this.Current));
+            return styled;
+        }
+    }
+
+
     class EditorSetting
     {
         public bool IsFullWidthAmbiguous { get; set; } = false;
@@ -39,30 +255,29 @@ namespace txte
         public static string Version = "0.0.1";
 
 
-        public Editor(IConsole console, EditorSetting setting)
+        public Editor(IConsole console, EditorSetting setting, Document document)
         {
             this.console = console;
             this.setting = setting;
-            this.isTriedToQuit = false;
+            this.document = document;
+            this.prompt = new TemporaryValue<IPrompt>();
         }
 
         readonly IConsole console;
         readonly List<TemporaryMessage> messages = new List<TemporaryMessage>();
 
         Document document;
+        TemporaryValue<IPrompt> prompt;
         EditorSetting setting;
-        private bool isTriedToQuit;
 
         Size editArea => 
             new Size(
                 this.console.Size.Width,
-                this.console.Size.Height - this.messages.Count - 1
+                this.console.Size.Height
+                - (this.prompt.HasValue ? 1 : 0)
+                - this.messages.Count
+                - 1
             );
-
-        public void SetDocument(Document document)
-        {
-            this.document = document;
-        }
 
         public void AddMessage(string value)
         {
@@ -91,18 +306,8 @@ namespace txte
                     switch (await this.ProcessKeyPress(keyInfo))
                     {
                         case KeyProcessingResults.Quit:
-                            if (this.isTriedToQuit || !this.document.IsModified)
-                            {
-                                return;
-                            }
-                            else
-                            {
-                                this.isTriedToQuit = true;
-                                this.AddMessage("File has unsaved changes. Press Ctrl-Q once again to quit.");
-                                break;
-                            }
+                            return;
                         default:
-                            this.isTriedToQuit = false;
                             break;
                     }
                     this.RefreshScreen(0);
@@ -112,7 +317,7 @@ namespace txte
                     var editAreaHeight = this.editArea.Height;
                     if (this.DiscardMessages().Any())
                     {
-                        this.RefreshScreen(Math.Max(editAreaHeight, 0));
+                        this.RefreshScreen(editAreaHeight.AtMin(0));
                     }
 
                 }
@@ -125,10 +330,16 @@ namespace txte
             this.console.RefreshScreen(
                 from,
                 this.setting,
-                this.DrawEditorRows,
-                this.DrawSatausBar,
-                this.DrawMessageBar,
+                this.RenderScreen,
                 this.document.Cursor);
+        }
+
+        void RenderScreen(IScreen screen, int from)
+        {
+            this.DrawEditorRows(screen, from);
+            this.DrawPromptBar(screen);
+            this.DrawSatausBar(screen);
+            this.DrawMessageBar(screen);
         }
 
         void DrawEditorRows(IScreen screen, int from)
@@ -152,10 +363,8 @@ namespace txte
         {
             var render = this.document.Rows[docRow].Render;
             var sublenderLength =
-                Math.Clamp(
-                    render.GetConsoleLength(ambiguousSetting) - this.document.Offset.X,
-                    0, this.console.Width
-                );
+                (render.GetConsoleLength(ambiguousSetting) - this.document.Offset.X)
+                .Clamp(0, this.console.Width);
             if (sublenderLength > 0)
             {
                 var (subrender, startIsFragmented, endIsFragmented) =
@@ -179,7 +388,7 @@ namespace txte
             if (this.document.IsUntouched && y == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
-                var welcomeLength = Math.Min(welcome.Length, this.console.Width);
+                var welcomeLength = welcome.Length.AtMax(this.console.Width);
                 var padding = (this.console.Width - welcomeLength) / 2;
                 var rowBuffer = new StringBuilder();
                 if (padding > 0)
@@ -199,57 +408,67 @@ namespace txte
                 screen.AppendOuterRow("~");
             }
         }
+        void DrawPromptBar(IScreen screen)
+        {
+            if (this.prompt.HasValue)
+            {
+                screen.AppendRow(this.prompt.Value.ToStyledString());
+            }
+        }
         void DrawSatausBar(IScreen screen)
         {
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
-            var fileNameLength = Math.Min(fileName.Length, 20);
+            var fileNameLength = fileName.Length.AtMax(20);
             (var clippedFileName, _, _) = 
                 fileName.SubConsoleString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
-            screen.AppendRow(fileInfo + new string(' ', padding) + positionInfo);
+            screen.AppendRow(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.Reversed) });
         }
         void DrawMessageBar(IScreen screen)
         {
             foreach (var message in this.messages)
             {
                 var text = message.Value;
-                var textLength = Math.Min(text.Length, this.console.Width);
+                var textLength = text.Length.AtMax(this.console.Width);
                 screen.AppendRow(text.Substring(0, textLength));
             }
         }
 
-        async Task<string?> Prompt(string promptPrefix, string promptSuffix)
+        async Task<IChoice?> ChoicePrompt(
+            string prompt,
+            IReadOnlyList<IChoice> choices,
+            IChoice? default_choice = null
+        )
         {
-            var input = new StringBuilder();
-
-            EventType prevEventType = EventType.UserAction;
+            var choicePrompt = new ChoosePromptInfo(prompt, choices, default_choice);
+            using var temporary = this.prompt.SetTemporary(choicePrompt);
+            
+            this.RefreshScreen(0);
             while (true)
             {
-                this.AddMessage($"{promptPrefix}{input.ToString()}{promptSuffix}");
-                if (prevEventType != EventType.Timeout) { this.RefreshScreen(this.editArea.Height); }
-
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                prevEventType = eventType;
-                if (eventType == EventType.Timeout) continue;
-                switch (keyInfo)
-                {
-                    case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
-                        input.Length = Math.Max(input.Length - 1, 0);
-                        break;
-                    case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                        return null;
-                    case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                        return input.ToString();
-                    default:
-                        if (!char.IsControl(keyInfo.KeyChar))
-                        { 
-                            input.Append(keyInfo.KeyChar);
-                        }
-                        break;
-                }
+                if (eventType == EventType.Timeout) { continue; }
+                (var state, var choosen) = choicePrompt.ProcessKey(keyInfo);
+                if (state == KeyProcessingResults.Quit) { return choosen; }
+                this.RefreshScreen(this.editArea.Height);
+            }
+        }
+
+        async Task<string?> InputPrompt(string prompt)
+        {
+            var inputPrompt = new InputPromptInfo(prompt);
+            using var temporary = this.prompt.SetTemporary(inputPrompt);
+            this.RefreshScreen(0);
+            while (true)
+            {
+                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
+                if (eventType == EventType.Timeout) { continue; }
+                (var state, var input) = inputPrompt.ProcessKey(keyInfo);
+                if (state == KeyProcessingResults.Quit) { return input; }
+                this.RefreshScreen(this.editArea.Height);
             }
         }
 
@@ -260,7 +479,7 @@ namespace txte
                 case ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift:
                 case ConsoleModifiers.Control | ConsoleModifiers.Shift:
                 case ConsoleModifiers.Alt | ConsoleModifiers.Shift:
-                    return this.ProcessOptionShiftKeyPress(keyInfo);
+                    return await this.ProcessOptionShiftKeyPress(keyInfo);
                 case ConsoleModifiers.Control | ConsoleModifiers.Alt:
                 case ConsoleModifiers.Control:
                 case ConsoleModifiers.Alt:
@@ -272,12 +491,15 @@ namespace txte
             }
         }
 
-        KeyProcessingResults ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
+        async Task<KeyProcessingResults> ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Key)
             {
                 case ConsoleKey.E:
                     return this.SwitchAmbiguousWidth();
+
+                case ConsoleKey.N:
+                    return await this.SelectNewLine();
 
                 default:
                     return KeyProcessingResults.Unhandled;
@@ -289,7 +511,7 @@ namespace txte
             switch (keyInfo.Key)
             {
                 case ConsoleKey.Q:
-                    return KeyProcessingResults.Quit;
+                    return await this.Quit();
 
                 case ConsoleKey.L:
                     return this.DelegateProcessing(this.console.Clear);
@@ -362,11 +584,49 @@ namespace txte
             return KeyProcessingResults.Running;
         }
 
+        async Task<KeyProcessingResults> Quit()
+        {
+            if (!this.document.IsModified) { return KeyProcessingResults.Quit; }
+
+            var yes = new Choice("Yes", 'y');
+            var no = new Choice("No", 'n');
+            var confirm = 
+                await ChoicePrompt(
+                    "File has unsaved changes. Quit without saving file?",
+                    new[] { yes, no }
+                );
+            if ((confirm ?? no) == yes)
+            {
+                return KeyProcessingResults.Quit;
+            }
+            else
+            {
+                return KeyProcessingResults.Running;
+            }
+        }
+
+        async Task<KeyProcessingResults> SelectNewLine()
+        {
+            var selection = 
+                await ChoicePrompt(
+                    "Change dnd of line sequence:",
+                    NewLineFormat.All,
+                    this.document.NewLineFormat
+                );
+            if (selection is NewLineFormat newLineFormat)
+            {
+                this.document.NewLineFormat = newLineFormat;
+                return KeyProcessingResults.Running;
+            }
+
+            return KeyProcessingResults.Running;
+        }
+
         async Task<KeyProcessingResults> Save()
         {
             try
             {
-                var savePath = this.document.Path ?? await this.Prompt("Save as:", "");
+                var savePath = this.document.Path ?? await this.InputPrompt("Save as (Esc to cancel):");
                 if (savePath == null)
                 {
                     this.AddMessage("Save cancelled");

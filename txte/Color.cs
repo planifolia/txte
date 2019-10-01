@@ -33,10 +33,15 @@ namespace txte
     {
         public static readonly ColorSet Default =
             new ColorSet(ThemeColor.Foreground, ThemeColor.Background);
+        public static readonly ColorSet Reversed =
+            new ColorSet(ThemeColor.Background, ThemeColor.Foreground);
         public static readonly ColorSet OutOfBounds =
             new ColorSet(ConsoleColor.DarkCyan, ThemeColor.Background);
         public static readonly ColorSet Fragment = 
             new ColorSet(ConsoleColor.Blue, ThemeColor.Foreground);
+
+        public static readonly ColorSet PromptMessage = 
+            new ColorSet(ConsoleColor.Yellow, ConsoleColor.DarkBlue);
 
         public ColorSet(ThemeColor foreground, ThemeColor background)
         {

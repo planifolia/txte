@@ -21,8 +21,7 @@ namespace txte
                 var document =
                     (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
                     : new Document();
-                var editor = new Editor(console, setting);
-                editor.SetDocument(document);
+                var editor = new Editor(console, setting, document);
                 editor.AddMessage("HELP: Ctrl-Q to quit, Shift-Ctrl-E to switch EAW ambiguous width...");
                 await editor.Run();
                 return 0;

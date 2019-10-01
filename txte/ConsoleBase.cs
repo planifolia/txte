@@ -6,21 +6,26 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    interface IConsole : IDisposable
+    interface IConsoleInput
+    {
+        Task<InputEventArgs> ReadKeyOrTimeoutAsync();
+    }
+
+    interface IConsoleOutput
     {
         int Height { get; }
         int Width { get; }
         Size Size { get; }
-
-        Task<InputEventArgs> ReadKeyOrTimeoutAsync();
         void RefreshScreen(
             int from,
             EditorSetting setting,
-            Action<IScreen, int> drawEditorRows,
-            Action<IScreen> drawStatusBar,
-            Action<IScreen> drawMessageBar,
+            Action<IScreen, int> RenderScreen,
             Point cursor);
         void Clear();
+    }
+
+    interface IConsole : IConsoleInput, IConsoleOutput, IDisposable
+    {
     }
 
     interface IScreen
