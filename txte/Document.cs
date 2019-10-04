@@ -112,6 +112,24 @@ namespace txte
             }
             return renderX;
         }
+        
+        public int RenderXToValueX(int renderX, EditorSetting setting)
+        {   
+            int tabSize = setting.TabSize;
+            bool ambiguousSetting = setting.IsFullWidthAmbiguous;
+            int renderXChecked = 0;
+            for (int valueX = 0; valueX < this.Value.Length; valueX++)
+            {
+                if (this.Value[valueX] == '\t')
+                {
+                    renderXChecked += (tabSize - 1) - (renderXChecked % tabSize);
+                }
+                renderXChecked += this.Value[valueX].GetEastAsianWidth(ambiguousSetting);
+                
+                if (renderXChecked > renderX) return valueX;
+            }
+            return this.Value.Length;
+        }
     }
 
     class Document
@@ -159,13 +177,28 @@ namespace txte
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
-        public Point ValuePosition => this.valuePosition;
+        public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public Point Offset => this.offset;
         public bool IsModified => this.Rows.Any(x => x.IsModified);
 
         int renderPositionX;
         Point valuePosition;
         Point offset;
+
+        public void Find(string query)
+        {
+            for (int i = 0; i < this.Rows.Count; i++)
+            {
+                var index = this.Rows[i].Value.IndexOf(query);
+                if (index >= 0)
+                {
+                    this.valuePosition.X = index;
+                    this.valuePosition.Y = i;
+                    this.offset.Y = this.Rows.Count; // to scroll up found word to top of screen
+                    break;
+                } 
+            }
+        }
 
         public void Save()
         {

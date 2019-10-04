@@ -70,16 +70,72 @@ namespace txte
         Unhandled,
     }
 
-    class TemporaryMessage
+    class Message
     {
-        public TemporaryMessage(string value, DateTime time)
+        static readonly TimeSpan expiration = TimeSpan.FromSeconds(5);
+
+        public Message(string value, DateTime? createdTime = null)
         {
             this.Value = value;
-            this.Time = time;
+            this.IsValid = true;
+            this.createdTime = createdTime ?? DateTime.Now;
         }
 
         public string Value { get; }
-        public DateTime Time { get; }
+        public bool IsValid { get; private set; }
+        readonly DateTime createdTime;
+
+        public void Expire()
+        {
+            this.IsValid = false;
+        }
+
+        public void CheckExpiration(DateTime now)
+        {
+            if (this.createdTime + Message.expiration < now)
+            {
+                this.IsValid = false;
+            }
+        }
+    }
+
+    class TemporaryMessage : Message, IDisposable
+    {
+        public TemporaryMessage(string value, DateTime? createdTime = null) : base(value, createdTime) { }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!this.disposedValue)
+            {
+                if (disposing)
+                {
+                    this.Expire();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: 上の Dispose(bool disposing) にアンマネージ リソースを解放するコードが含まれる場合にのみ、ファイナライザーをオーバーライドします。
+        // ~TemporaryMessage()
+        // {
+        //   // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+        //   Dispose(false);
+        // }
+
+        // このコードは、破棄可能なパターンを正しく実装できるように追加されました。
+        public void Dispose()
+        {
+            // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+            Dispose(true);
+            // TODO: 上のファイナライザーがオーバーライドされる場合は、次の行のコメントを解除してください。
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
+
     }
 
     interface IPrompt
@@ -205,15 +261,17 @@ namespace txte
 
     class InputPromptInfo : IPrompt, IPrompt<string>
     {
-        public InputPromptInfo(string message)
+        public InputPromptInfo(string message, Action<string, ConsoleKeyInfo>? callback = null)
         {
             this.Message = message;
             this.input = new StringBuilder();
+            this.callback = callback;
         }
 
         public string Message { get; }
 
-        private StringBuilder input;
+        readonly StringBuilder input;
+        readonly Action<string, ConsoleKeyInfo>? callback;
 
         public string Current => this.input.ToString();
 
@@ -222,16 +280,18 @@ namespace txte
             switch (keyInfo)
             {
                 case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
-                    input.Length = (input.Length - 1).AtMin(0);
+                    this.input.Length = (input.Length - 1).AtMin(0);
+                    this.callback?.Invoke(this.input.ToString(), keyInfo);
                     return (KeyProcessingResults.Running, default);
                 case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
                     return (KeyProcessingResults.Quit, default);
                 case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, input.ToString());
+                    return (KeyProcessingResults.Quit, this.input.ToString());
                 default:
                     if (!char.IsControl(keyInfo.KeyChar))
                     { 
-                        input.Append(keyInfo.KeyChar);
+                        this.input.Append(keyInfo.KeyChar);
+                        this.callback?.Invoke(this.input.ToString(), keyInfo);
                     }
                     return (KeyProcessingResults.Running, default);
             }
@@ -289,8 +349,10 @@ namespace txte
         IReadOnlyList<MenuItem> MakeMenuItems(EditorSetting setting)
         {
             var items = new[] {
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.F, false, false, true), "Find", setting),
                 new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.Q, false, false, true), "Quit", setting),
                 new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.S, false, false, true), "Save", setting),
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.S, true, false, true), "Save As", setting),
                 new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, false, false, true), "Refresh", setting),
                 new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.E, true, false, true), "Change East Asian Width", setting),
                 new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, true, false, true), "Change End of Line sequence", setting),
@@ -310,18 +372,19 @@ namespace txte
         public static string Version = "0.0.1";
 
 
-        public Editor(IConsole console, EditorSetting setting, Document document)
+        public Editor(IConsole console, EditorSetting setting, Document document, Message firstMessage)
         {
             this.console = console;
             this.setting = setting;
             this.document = document;
             this.prompt = new TemporaryValue<IPrompt>();
+            this.message = firstMessage;
             this.menu = new Menu(setting);
         }
 
         readonly IConsole console;
-        readonly List<TemporaryMessage> messages = new List<TemporaryMessage>();
         readonly Menu menu;
+        public Message message;
 
         Document document;
         TemporaryValue<IPrompt> prompt;
@@ -332,26 +395,9 @@ namespace txte
                 this.console.Size.Width,
                 this.console.Size.Height
                 - (this.prompt.HasValue ? 1 : 0)
-                - this.messages.Count
+                - (this.message.IsValid ? 1 : 0)
                 - 1
             );
-
-        public void AddMessage(string value)
-        {
-            this.messages.Add(new TemporaryMessage(value, DateTime.Now));
-        }
-
-        IEnumerable<TemporaryMessage> DiscardMessages()
-        {
-            var now = DateTime.Now;
-            var expireds = 
-                this.messages.Where(x => now - x.Time > TimeSpan.FromSeconds(5)).ToArray();
-            foreach (var x in expireds)
-            {
-                this.messages.Remove(x);
-            }
-            return expireds;
-        }
 
         public async Task Run()
         {
@@ -359,25 +405,29 @@ namespace txte
             while (true)
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                if (eventType == EventType.UserAction) {
-                    switch (await this.ProcessKeyPress(keyInfo))
-                    {
-                        case KeyProcessingResults.Quit:
-                            return;
-                        default:
-                            break;
-                    }
-                    this.RefreshScreen(0);
+                if (eventType == EventType.Timeout)
+                { 
+                    this.DiscardMessage();
+                    continue;
                 }
-                else
+                switch (await this.ProcessKeyPress(keyInfo))
                 {
-                    var editAreaHeight = this.editArea.Height;
-                    if (this.DiscardMessages().Any())
-                    {
-                        this.RefreshScreen(editAreaHeight.AtMin(0));
-                    }
-
+                    case KeyProcessingResults.Quit:
+                        return;
+                    default:
+                        break;
                 }
+                this.RefreshScreen(0);
+            }
+        }
+
+        void DiscardMessage()
+        {
+            var editAreaHeight = this.editArea.Height;
+            this.message.CheckExpiration(DateTime.Now);
+            if (editAreaHeight != this.editArea.Height)
+            {
+                this.RefreshScreen(editAreaHeight);
             }
         }
 
@@ -385,7 +435,7 @@ namespace txte
         {
             this.document.UpdateOffset(this.editArea, this.setting);
             this.console.RefreshScreen(
-                from,
+                from.AtMin(0),
                 this.setting,
                 this.RenderScreen,
                 this.document.Cursor);
@@ -448,7 +498,7 @@ namespace txte
         {
             var keyJoiner = " + ";
             var separator = "  ";
-            var titleRowCount = 3;
+            var titleRowCount = 2;
 
             if (y - titleRowCount >= this.menu.Items.Count)
             {
@@ -470,24 +520,24 @@ namespace txte
                     new StyledString(message, ColorSet.OutOfBounds),
                 });
             }
+            // else if (y == 1)
+            // {
+            //     var message1 = "hint: You can omit ";
+            //     var key = "Crtl";
+            //     var message2 = " on the menu screen.";
+            //     var messageLength = message1.Length + key.Length + message2.Length;
+            //     var leftPadding = (this.console.Width - messageLength) / 2 - 1;
+            //     screen.AppendRow(new[]
+            //     { 
+            //         new StyledString("~", ColorSet.OutOfBounds),
+            //         new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
+            //         new StyledString(message1, ColorSet.OutOfBounds),
+            //         new StyledString(key, ColorSet.KeyExpression),
+            //         new StyledString(message2, ColorSet.OutOfBounds),
+            //         // new StyledString(new string(' ', this.console.Width - message1.Length - key.Length - message2.Length), ColorSet.SystemMessage),
+            //     });
+            // }
             else if (y == 1)
-            {
-                var message1 = "hint: You can omit ";
-                var key = "Crtl";
-                var message2 = " on the menu screen.";
-                var messageLength = message1.Length + key.Length + message2.Length;
-                var leftPadding = (this.console.Width - messageLength) / 2 - 1;
-                screen.AppendRow(new[]
-                { 
-                    new StyledString("~", ColorSet.OutOfBounds),
-                    new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
-                    new StyledString(message1, ColorSet.OutOfBounds),
-                    new StyledString(key, ColorSet.KeyExpression),
-                    new StyledString(message2, ColorSet.OutOfBounds),
-                    // new StyledString(new string(' ', this.console.Width - message1.Length - key.Length - message2.Length), ColorSet.SystemMessage),
-                });
-            }
-            else if (y == 2)
             {
                 screen.AppendRow(new[]
                 { 
@@ -569,9 +619,9 @@ namespace txte
         }
         void DrawMessageBar(IScreen screen)
         {
-            foreach (var message in this.messages)
+            if (this.message.IsValid)
             {
-                var text = message.Value;
+                var text = this.message.Value;
                 var textLength = text.Length.AtMax(this.console.Width);
                 screen.AppendRow(text.Substring(0, textLength));
             }
@@ -584,10 +634,15 @@ namespace txte
             while (true)
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                if (eventType == EventType.Timeout) { continue; }
+                if (eventType == EventType.Timeout)
+                { 
+                    this.DiscardMessage();
+                    continue;
+                }
                 (var state, var input) = prompt.ProcessKey(keyInfo);
                 if (state == KeyProcessingResults.Quit) { return input; }
-                this.RefreshScreen(this.editArea.Height);
+                this.RefreshScreen(0);
+                //this.RefreshScreen(this.editArea.Height);
             }
         }
         
@@ -595,13 +650,19 @@ namespace txte
         private async Task<KeyProcessingResults> OpenMenu()
         {
             this.menu.IsShown = true;
+            using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen.");
+            this.message = message;
             this.RefreshScreen(0);
             try
             {
                 while (true)
                 {
                     (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                    if (eventType == EventType.Timeout) { continue; }
+                    if (eventType == EventType.Timeout)
+                    { 
+                        this.DiscardMessage();
+                        continue;
+                    }
                     if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
                     this.menu.IsShown = false;
                     switch (keyInfo.Modifiers)
@@ -662,6 +723,9 @@ namespace txte
                 case ConsoleKey.L:
                     return await this.SelectNewLine();
 
+                case ConsoleKey.S:
+                    return await this.SaveAs();
+
                 default:
                     return KeyProcessingResults.Unhandled;
             }
@@ -671,6 +735,9 @@ namespace txte
         {
             switch (keyInfo.Key)
             {
+                case ConsoleKey.F:
+                    return await this.Find();
+
                 case ConsoleKey.Q:
                     return await this.Quit();
 
@@ -678,7 +745,7 @@ namespace txte
                     return this.DelegateProcessing(this.console.Clear);
 
                 case ConsoleKey.S:
-                    return await this.Save();
+                    return this.document.Path == null ? await this.SaveAs() : await this.Save();
 
                 default:
                     return KeyProcessingResults.Unhandled;
@@ -757,7 +824,7 @@ namespace txte
                 await Prompt(
                     new ChoosePromptInfo(
                         "File has unsaved changes. Quit without saving?",
-                        new[] { yes, no }
+                        new[] { no, yes }
                     )
                 );
             if ((confirm ?? no) == yes)
@@ -793,20 +860,62 @@ namespace txte
         {
             try
             {
-                var savePath = 
-                    this.document.Path ?? await this.Prompt(new InputPromptInfo("Save as (Esc to cancel):"));
-                if (savePath == null)
+                if (File.Exists(this.document.Path))
                 {
-                    this.AddMessage("Save is cancelled");
-                    return KeyProcessingResults.Running;
+                    var yes = new Choice("Yes", 'y');
+                    var no = new Choice("No", 'n');
+                    var confirm = 
+                        await Prompt(
+                            new ChoosePromptInfo(
+                                "Override?",
+                                new[] { no, yes }
+                            )
+                        );
+                    if ((confirm ?? no) == no)
+                    {
+                        this.message = new Message("Save is cancelled");
+                        return KeyProcessingResults.Running;
+                    }
                 }
-                this.document.Path = savePath;
                 this.document.Save();
-                this.AddMessage("File is saved");
+                this.message = new Message("File is saved");
             }
             catch (IOException ex)
             {
-                this.AddMessage(ex.Message);
+                this.message = new Message(ex.Message);
+            }
+            return KeyProcessingResults.Running;
+        }
+        
+        async Task<KeyProcessingResults> SaveAs()
+        {
+            var message = new Message("hint: Esc to cancel");
+            this.message = message;
+            var savePath = await this.Prompt(new InputPromptInfo("Save as:"));
+            if (savePath == null)
+            {
+                this.message = new Message("Save is cancelled");
+                return KeyProcessingResults.Running;
+            }
+            
+            this.document.Path = savePath;
+            await this.Save();
+            return KeyProcessingResults.Running;
+        }
+
+        async Task<KeyProcessingResults> Find()
+        {
+            var savedPosition = this.document.ValuePosition;
+            using var message = new TemporaryMessage("hint: Esc to cancel");
+            this.message = message;
+            var query = await this.Prompt(new InputPromptInfo("Search:", (x, _) => this.document.Find(x)));
+            if (query != null)
+            {
+                this.document.Find(query);
+            }
+            else
+            {
+                this.document.ValuePosition = savedPosition;
             }
             return KeyProcessingResults.Running;
         }
@@ -857,7 +966,7 @@ namespace txte
             var ambiguousSize =
                 this.setting.IsFullWidthAmbiguous ? "Full Width"
                 : "Half Width";
-            this.AddMessage($"East Asian Width / Ambiguous = {ambiguousSize}");
+            this.message = new Message($"East Asian Width / Ambiguous = {ambiguousSize}");
             return KeyProcessingResults.Running;
         }
     }
