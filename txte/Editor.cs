@@ -8,363 +8,11 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    class TemporaryValue<T>
-    {
-        public TemporaryValue()
-        {
-            this.value = default!;
-        }
-
-        public bool HasValue { get; private set; }
-        public T Value => this.HasValue ? this.value : throw new InvalidOperationException();
-
-        T value;
-
-        public DisposingToken SetTemporary(T value)
-        {
-            this.HasValue = true;
-            this.value = value;
-            return new DisposingToken(this);
-        }
-
-        public class DisposingToken : IDisposable
-        {
-            public DisposingToken(TemporaryValue<T> source)
-            {
-                this.source = source;
-            }
-
-            TemporaryValue<T> source;
-
-            #region IDisposable Support
-            private bool disposedValue = false;
-
-            protected virtual void Dispose(bool disposing)
-            {
-                if (!this.disposedValue)
-                {
-                    if (disposing)
-                    {
-                        this.source.HasValue = false;
-                        this.source.value = default!;
-                    }
-
-                    this.source = null!;
-
-                    disposedValue = true;
-                }
-            }
-
-            public void Dispose()
-            {
-                Dispose(true);
-            }
-            #endregion
-        }
-    }
-
     enum KeyProcessingResults
     {
         Running,
         Quit,
         Unhandled,
-    }
-
-    class Message
-    {
-        static readonly TimeSpan expiration = TimeSpan.FromSeconds(5);
-
-        public Message(string value, DateTime? createdTime = null)
-        {
-            this.Value = value;
-            this.IsValid = true;
-            this.createdTime = createdTime ?? DateTime.Now;
-        }
-
-        public string Value { get; }
-        public bool IsValid { get; private set; }
-        readonly DateTime createdTime;
-
-        public void Expire()
-        {
-            this.IsValid = false;
-        }
-
-        public void CheckExpiration(DateTime now)
-        {
-            if (this.createdTime + Message.expiration < now)
-            {
-                this.IsValid = false;
-            }
-        }
-    }
-
-    class TemporaryMessage : Message, IDisposable
-    {
-        public TemporaryMessage(string value, DateTime? createdTime = null) : base(value, createdTime) { }
-
-        #region IDisposable Support
-        private bool disposedValue = false;
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!this.disposedValue)
-            {
-                if (disposing)
-                {
-                    this.Expire();
-                }
-
-                disposedValue = true;
-            }
-        }
-
-        // TODO: 上の Dispose(bool disposing) にアンマネージ リソースを解放するコードが含まれる場合にのみ、ファイナライザーをオーバーライドします。
-        // ~TemporaryMessage()
-        // {
-        //   // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
-        //   Dispose(false);
-        // }
-
-        // このコードは、破棄可能なパターンを正しく実装できるように追加されました。
-        public void Dispose()
-        {
-            // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
-            Dispose(true);
-            // TODO: 上のファイナライザーがオーバーライドされる場合は、次の行のコメントを解除してください。
-            // GC.SuppressFinalize(this);
-        }
-        #endregion
-
-    }
-
-    interface IPrompt
-    {
-        IEnumerable<StyledString> ToStyledString();
-    }
-    interface IPrompt<TResult> : IPrompt where TResult: class
-    {
-        (KeyProcessingResults, TResult?) ProcessKey(ConsoleKeyInfo keyInfo);
-    }
-
-    interface IChoice
-    {
-        string Name { get; }
-        char Shortcut { get; } 
-    }
-
-    class Choice : IChoice
-    {
-        public Choice(string name, char shortcut)
-        {
-            this.Name = name;
-            this.Shortcut = shortcut;
-        }
-        public string Name { get; }
-        public char Shortcut { get; } 
-    }
-
-    class ChoosePromptInfo : IPrompt, IPrompt<IChoice>
-    {
-        public ChoosePromptInfo(string message, IReadOnlyList<IChoice> choices, IChoice? default_choice = null)
-        {
-            this.message = message;
-            this.choices = choices;
-            if (default_choice == null)
-            {
-                this.choosenIndex = 0;
-            }
-            else
-            {
-                this.choosenIndex = 
-                    this.choices
-                    .Select((c, i) => (c, i))
-                    .Where(x => x.c == default_choice)
-                    .Select(x => x.i)
-                    .First();
-            }
-        }
-
-        readonly string message;
-        readonly IReadOnlyList<IChoice> choices;
-        int choosenIndex;
-
-        public IChoice Choosen => this.choices[this.choosenIndex];
-
-        public (KeyProcessingResults, IChoice?) ProcessKey(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo)
-            {
-                case { Key: ConsoleKey.LeftArrow, Modifiers: (ConsoleModifiers)0 }:
-                    this.MoveLeft();
-                    return (KeyProcessingResults.Running, default);
-                case { Key: ConsoleKey.RightArrow, Modifiers: (ConsoleModifiers)0 }:
-                    this.MoveRight();
-                    return (KeyProcessingResults.Running, default);
-                case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, default);
-                case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, this.Choosen);
-                default:
-                    if (this.AcceptShortcut(keyInfo.KeyChar) is { } choosen)
-                    {
-                        return (KeyProcessingResults.Quit, choosen);
-                    }
-                    else
-                    {
-                    return (KeyProcessingResults.Running, default);
-                    }
-            }
-        }
-
-        public IEnumerable<StyledString> ToStyledString()
-        {
-            var styled = new List<StyledString>();
-            styled.Add(new StyledString(this.message, ColorSet.SystemMessage));
-            styled.Add(new StyledString(" "));
-            var choiceCount = this.choices.Count;
-            for (int i = 0; i < choiceCount; i++)
-            {
-                if (i != 0) {
-                    styled.Add(new StyledString(" / "));
-                }
-                var colorSet = (i == this.choosenIndex) ? ColorSet.Reversed : ColorSet.Default;
-                styled.Add(new StyledString(
-                    $"{this.choices[i].Name}({this.choices[i].Shortcut})",
-                    colorSet
-                ));
-            }
-            return styled;
-        }
-
-        void MoveLeft()
-        {
-            var choiceCount = this.choices.Count;
-            this.choosenIndex = (this.choosenIndex - 1 + choiceCount) % choiceCount;
-        }
-        void MoveRight()
-        {
-            var choiceCount = this.choices.Count;
-            this.choosenIndex = (this.choosenIndex + 1) % choiceCount;
-        }
-
-        IChoice? AcceptShortcut(char keyChar)
-        {
-            foreach (var choice in this.choices)
-            {
-                if (choice.Shortcut ==keyChar) { return choice; }
-            }
-            
-            return null;
-        }
-    }
-
-    class InputPromptInfo : IPrompt, IPrompt<string>
-    {
-        public InputPromptInfo(string message, Action<string, ConsoleKeyInfo>? callback = null)
-        {
-            this.Message = message;
-            this.input = new StringBuilder();
-            this.callback = callback;
-        }
-
-        public string Message { get; }
-
-        readonly StringBuilder input;
-        readonly Action<string, ConsoleKeyInfo>? callback;
-
-        public string Current => this.input.ToString();
-
-        public (KeyProcessingResults, string?) ProcessKey(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo)
-            {
-                case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
-                    this.input.Length = (input.Length - 1).AtMin(0);
-                    this.callback?.Invoke(this.input.ToString(), keyInfo);
-                    return (KeyProcessingResults.Running, default);
-                case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, default);
-                case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, this.input.ToString());
-                default:
-                    if (!char.IsControl(keyInfo.KeyChar))
-                    { 
-                        this.input.Append(keyInfo.KeyChar);
-                        this.callback?.Invoke(this.input.ToString(), keyInfo);
-                    }
-                    return (KeyProcessingResults.Running, default);
-            }
-        }
-
-        public IEnumerable<StyledString> ToStyledString()
-        {
-            var styled = new List<StyledString>();
-            styled.Add(new StyledString(this.Message, ColorSet.SystemMessage));
-            styled.Add(new StyledString(" "));
-            styled.Add(new StyledString(this.Current));
-            return styled;
-        }
-    }
-
-    class MenuItem
-    {
-        public MenuItem(ConsoleKeyInfo keyInfo, string effect, EditorSetting setting)
-        {
-            this.keyInfo = keyInfo;
-            var keys = new List<string>();
-            if ((keyInfo.Modifiers & ConsoleModifiers.Control) != 0)
-            {
-                keys.Add("Ctrl");
-            }
-            if ((keyInfo.Modifiers & ConsoleModifiers.Shift) != 0)
-            {
-                keys.Add("Shift");
-            }
-            keys.Add(keyInfo.Key.ToString());
-
-            this.keys = keys.ToArray();
-            this.effect = effect;
-            this.setting = setting;
-        }
-        
-        public readonly ConsoleKeyInfo keyInfo;
-        public readonly string[] keys;
-        public readonly string effect;
-        readonly EditorSetting setting;
-    }
-
-    class Menu
-    {
-        public Menu(EditorSetting setting)
-        {
-            this.setting = setting;
-            this.Items = MakeMenuItems(this.setting);
-        }
-
-        public bool IsShown { get; set; }
-        public IReadOnlyList<MenuItem> Items;
-        private readonly EditorSetting setting;
-
-        IReadOnlyList<MenuItem> MakeMenuItems(EditorSetting setting)
-        {
-            var items = new[] {
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.F, false, false, true), "Find", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.Q, false, false, true), "Quit", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.S, false, false, true), "Save", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.S, true, false, true), "Save As", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, false, false, true), "Refresh", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.E, true, false, true), "Change East Asian Width", setting),
-                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, true, false, true), "Change End of Line sequence", setting),
-            };
-            return items;
-        }
-    }
-
-    class EditorSetting
-    {
-        public bool IsFullWidthAmbiguous { get; set; } = false;
-        public int TabSize { get; set; } = 4;
     }
 
     class Editor
@@ -818,16 +466,14 @@ namespace txte
         {
             if (!this.document.IsModified) { return KeyProcessingResults.Quit; }
 
-            var yes = new Choice("Yes", 'y');
-            var no = new Choice("No", 'n');
             var confirm = 
                 await Prompt(
-                    new ChoosePromptInfo(
+                    new ChoosePrompt(
                         "File has unsaved changes. Quit without saving?",
-                        new[] { no, yes }
+                        new[] { Choice.No, Choice.Yes }
                     )
                 );
-            if ((confirm ?? no) == yes)
+            if ((confirm ?? Choice.No) == Choice.No)
             {
                 return KeyProcessingResults.Quit;
             }
@@ -841,7 +487,7 @@ namespace txte
         {
             var selection = 
                 await Prompt(
-                    new ChoosePromptInfo(
+                    new ChoosePrompt(
                         "Change end of line sequence:",
                         NewLineFormat.All,
                         this.document.NewLineFormat
@@ -862,16 +508,14 @@ namespace txte
             {
                 if (File.Exists(this.document.Path))
                 {
-                    var yes = new Choice("Yes", 'y');
-                    var no = new Choice("No", 'n');
                     var confirm = 
                         await Prompt(
-                            new ChoosePromptInfo(
+                            new ChoosePrompt(
                                 "Override?",
-                                new[] { no, yes }
+                                new[] { Choice.No, Choice.Yes }
                             )
                         );
-                    if ((confirm ?? no) == no)
+                    if ((confirm ?? Choice.No) == Choice.No)
                     {
                         this.message = new Message("Save is cancelled");
                         return KeyProcessingResults.Running;
@@ -891,7 +535,7 @@ namespace txte
         {
             var message = new Message("hint: Esc to cancel");
             this.message = message;
-            var savePath = await this.Prompt(new InputPromptInfo("Save as:"));
+            var savePath = await this.Prompt(new InputPrompt("Save as:"));
             if (savePath == null)
             {
                 this.message = new Message("Save is cancelled");
@@ -908,7 +552,7 @@ namespace txte
             var savedPosition = this.document.ValuePosition;
             using var message = new TemporaryMessage("hint: Esc to cancel");
             this.message = message;
-            var query = await this.Prompt(new InputPromptInfo("Search:", (x, _) => this.document.Find(x)));
+            var query = await this.Prompt(new InputPrompt("Search:", (x, _) => this.document.Find(x)));
             if (query != null)
             {
                 this.document.Find(query);
