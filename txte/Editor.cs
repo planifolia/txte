@@ -86,6 +86,10 @@ namespace txte
     {
         IEnumerable<StyledString> ToStyledString();
     }
+    interface IPrompt<TResult> : IPrompt where TResult: class
+    {
+        (KeyProcessingResults, TResult?) ProcessKey(ConsoleKeyInfo keyInfo);
+    }
 
     interface IChoice
     {
@@ -104,7 +108,7 @@ namespace txte
         public char Shortcut { get; } 
     }
 
-    class ChoosePromptInfo : IPrompt
+    class ChoosePromptInfo : IPrompt, IPrompt<IChoice>
     {
         public ChoosePromptInfo(string message, IReadOnlyList<IChoice> choices, IChoice? default_choice = null)
         {
@@ -160,7 +164,7 @@ namespace txte
         public IEnumerable<StyledString> ToStyledString()
         {
             var styled = new List<StyledString>();
-            styled.Add(new StyledString(this.message, ColorSet.PromptMessage));
+            styled.Add(new StyledString(this.message, ColorSet.SystemMessage));
             styled.Add(new StyledString(" "));
             var choiceCount = this.choices.Count;
             for (int i = 0; i < choiceCount; i++)
@@ -199,7 +203,7 @@ namespace txte
         }
     }
 
-    class InputPromptInfo : IPrompt
+    class InputPromptInfo : IPrompt, IPrompt<string>
     {
         public InputPromptInfo(string message)
         {
@@ -236,13 +240,64 @@ namespace txte
         public IEnumerable<StyledString> ToStyledString()
         {
             var styled = new List<StyledString>();
-            styled.Add(new StyledString(this.Message, ColorSet.PromptMessage));
+            styled.Add(new StyledString(this.Message, ColorSet.SystemMessage));
             styled.Add(new StyledString(" "));
             styled.Add(new StyledString(this.Current));
             return styled;
         }
     }
 
+    class MenuItem
+    {
+        public MenuItem(ConsoleKeyInfo keyInfo, string effect, EditorSetting setting)
+        {
+            this.keyInfo = keyInfo;
+            var keys = new List<string>();
+            if ((keyInfo.Modifiers & ConsoleModifiers.Control) != 0)
+            {
+                keys.Add("Ctrl");
+            }
+            if ((keyInfo.Modifiers & ConsoleModifiers.Shift) != 0)
+            {
+                keys.Add("Shift");
+            }
+            keys.Add(keyInfo.Key.ToString());
+
+            this.keys = keys.ToArray();
+            this.effect = effect;
+            this.setting = setting;
+        }
+        
+        public readonly ConsoleKeyInfo keyInfo;
+        public readonly string[] keys;
+        public readonly string effect;
+        readonly EditorSetting setting;
+    }
+
+    class Menu
+    {
+        public Menu(EditorSetting setting)
+        {
+            this.setting = setting;
+            this.Items = MakeMenuItems(this.setting);
+        }
+
+        public bool IsShown { get; set; }
+        public IReadOnlyList<MenuItem> Items;
+        private readonly EditorSetting setting;
+
+        IReadOnlyList<MenuItem> MakeMenuItems(EditorSetting setting)
+        {
+            var items = new[] {
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.Q, false, false, true), "Quit", setting),
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.S, false, false, true), "Save", setting),
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, false, false, true), "Refresh", setting),
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.E, true, false, true), "Change East Asian Width", setting),
+                new MenuItem(new ConsoleKeyInfo((char)0x0, ConsoleKey.L, true, false, true), "Change End of Line sequence", setting),
+            };
+            return items;
+        }
+    }
 
     class EditorSetting
     {
@@ -261,10 +316,12 @@ namespace txte
             this.setting = setting;
             this.document = document;
             this.prompt = new TemporaryValue<IPrompt>();
+            this.menu = new Menu(setting);
         }
 
         readonly IConsole console;
         readonly List<TemporaryMessage> messages = new List<TemporaryMessage>();
+        readonly Menu menu;
 
         Document document;
         TemporaryValue<IPrompt> prompt;
@@ -337,8 +394,8 @@ namespace txte
         void RenderScreen(IScreen screen, int from)
         {
             this.DrawEditorRows(screen, from);
-            this.DrawPromptBar(screen);
             this.DrawSatausBar(screen);
+            this.DrawPromptBar(screen);
             this.DrawMessageBar(screen);
         }
 
@@ -348,7 +405,11 @@ namespace txte
             for (int y = from; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
-                if (docRow < this.document.Rows.Count)
+                if (this.menu.IsShown)
+                {
+                    this.DrawMenu(screen, y);
+                }
+                else if (docRow < this.document.Rows.Count)
                 {
                     this.DrawDocumentRow(screen, ambiguousSetting, docRow);
                 }
@@ -380,6 +441,85 @@ namespace txte
             else
             {
                 screen.AppendRow("");
+            }
+        }
+        
+        void DrawMenu(IScreen screen, int y)
+        {
+            var keyJoiner = " + ";
+            var separator = "  ";
+            var titleRowCount = 3;
+
+            if (y - titleRowCount >= this.menu.Items.Count)
+            {
+                screen.AppendRow(new[]
+                { 
+                    // new StyledString(new string(' ', this.console.Width), ColorSet.SystemMessage),
+                    new StyledString("~", ColorSet.OutOfBounds),
+                });
+            }
+            else if (y == 0)
+            {
+                var message = "Menu / Shortcuts";
+                var messageLength = message.Length;
+                var leftPadding = (this.console.Width - messageLength) / 2 - 1;
+                screen.AppendRow(new[]
+                { 
+                    new StyledString("~", ColorSet.OutOfBounds),
+                    new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
+                    new StyledString(message, ColorSet.OutOfBounds),
+                });
+            }
+            else if (y == 1)
+            {
+                var message1 = "hint: You can omit ";
+                var key = "Crtl";
+                var message2 = " on the menu screen.";
+                var messageLength = message1.Length + key.Length + message2.Length;
+                var leftPadding = (this.console.Width - messageLength) / 2 - 1;
+                screen.AppendRow(new[]
+                { 
+                    new StyledString("~", ColorSet.OutOfBounds),
+                    new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
+                    new StyledString(message1, ColorSet.OutOfBounds),
+                    new StyledString(key, ColorSet.KeyExpression),
+                    new StyledString(message2, ColorSet.OutOfBounds),
+                    // new StyledString(new string(' ', this.console.Width - message1.Length - key.Length - message2.Length), ColorSet.SystemMessage),
+                });
+            }
+            else if (y == 2)
+            {
+                screen.AppendRow(new[]
+                { 
+                    // new StyledString(new string(' ', this.console.Width), ColorSet.SystemMessage),
+                    new StyledString("~", ColorSet.OutOfBounds),
+                });
+                return;
+            }
+            else
+            {
+                var item = this.menu.Items[y - titleRowCount];
+
+                var leftLength = item.effect.Length;
+                var rightLength = item.keys.Select(x => x.Length).Sum() + (item.keys.Length - 1) * keyJoiner.Length;
+                var leftPadding = (this.console.Width - separator.Length) / 2 - leftLength - 1;
+                // var rightPadding = this.console.Width - leftLength - rightLength - leftPadding - 2;
+                var spans = new List<StyledString>();
+                spans.Add(new StyledString("~", ColorSet.OutOfBounds));
+                spans.Add(new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds));
+                spans.Add(new StyledString(item.effect, ColorSet.OutOfBounds));
+                spans.Add(new StyledString(separator, ColorSet.OutOfBounds));
+                int i = 0;
+                foreach (var key in item.keys)
+                {
+                    if (i != 0) {
+                        spans.Add(new StyledString(keyJoiner, ColorSet.OutOfBounds));
+                    }
+                    spans.Add(new StyledString(key, ColorSet.KeyExpression));
+                    i++;
+                }
+                // spans.Add(new StyledString(new string(' ', rightPadding), ColorSet.SystemMessage));
+                screen.AppendRow(spans);
             }
         }
 
@@ -425,7 +565,7 @@ namespace txte
             var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
-            screen.AppendRow(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.Reversed) });
+            screen.AppendRow(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
         }
         void DrawMessageBar(IScreen screen)
         {
@@ -436,39 +576,64 @@ namespace txte
                 screen.AppendRow(text.Substring(0, textLength));
             }
         }
-
-        async Task<IChoice?> ChoicePrompt(
-            string prompt,
-            IReadOnlyList<IChoice> choices,
-            IChoice? default_choice = null
-        )
+        
+        async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt) where TResult: class
         {
-            var choicePrompt = new ChoosePromptInfo(prompt, choices, default_choice);
-            using var temporary = this.prompt.SetTemporary(choicePrompt);
-            
+            using var _ = this.prompt.SetTemporary(prompt);
             this.RefreshScreen(0);
             while (true)
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout) { continue; }
-                (var state, var choosen) = choicePrompt.ProcessKey(keyInfo);
-                if (state == KeyProcessingResults.Quit) { return choosen; }
+                (var state, var input) = prompt.ProcessKey(keyInfo);
+                if (state == KeyProcessingResults.Quit) { return input; }
                 this.RefreshScreen(this.editArea.Height);
             }
         }
+        
 
-        async Task<string?> InputPrompt(string prompt)
+        private async Task<KeyProcessingResults> OpenMenu()
         {
-            var inputPrompt = new InputPromptInfo(prompt);
-            using var temporary = this.prompt.SetTemporary(inputPrompt);
+            this.menu.IsShown = true;
             this.RefreshScreen(0);
-            while (true)
+            try
             {
-                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                if (eventType == EventType.Timeout) { continue; }
-                (var state, var input) = inputPrompt.ProcessKey(keyInfo);
-                if (state == KeyProcessingResults.Quit) { return input; }
-                this.RefreshScreen(this.editArea.Height);
+                while (true)
+                {
+                    (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
+                    if (eventType == EventType.Timeout) { continue; }
+                    if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
+                    this.menu.IsShown = false;
+                    switch (keyInfo.Modifiers)
+                    {
+                        case ConsoleModifiers.Control | ConsoleModifiers.Shift:
+                        case ConsoleModifiers.Shift:
+                        {
+                            if (await this.ProcessOptionShiftKeyPress(keyInfo) is var result && result != KeyProcessingResults.Unhandled)
+                            {
+                                return result;
+                            }
+                            break;
+                        }
+                        case ConsoleModifiers.Control:
+                        case (ConsoleModifiers)0:
+                        {
+                            if (await this.ProcessOptionKeyPress(keyInfo) is var result && result != KeyProcessingResults.Unhandled)
+                            {
+                                return result;
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    this.menu.IsShown = true;
+                    this.RefreshScreen(0);
+                }
+            }
+            finally
+            {
+                this.menu.IsShown = false;
             }
         }
 
@@ -476,18 +641,14 @@ namespace txte
         {
             switch (keyInfo.Modifiers)
             {
-                case ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift:
                 case ConsoleModifiers.Control | ConsoleModifiers.Shift:
-                case ConsoleModifiers.Alt | ConsoleModifiers.Shift:
                     return await this.ProcessOptionShiftKeyPress(keyInfo);
-                case ConsoleModifiers.Control | ConsoleModifiers.Alt:
                 case ConsoleModifiers.Control:
-                case ConsoleModifiers.Alt:
                     return await this.ProcessOptionKeyPress(keyInfo);
                 case ConsoleModifiers.Shift:
                     return this.ProcessShiftKeyPress(keyInfo);
                 default:
-                    return this.ProcessSingleKeyPress(keyInfo);
+                    return await this.ProcessSingleKeyPress(keyInfo);
             }
         }
 
@@ -498,7 +659,7 @@ namespace txte
                 case ConsoleKey.E:
                     return this.SwitchAmbiguousWidth();
 
-                case ConsoleKey.N:
+                case ConsoleKey.L:
                     return await this.SelectNewLine();
 
                 default:
@@ -542,10 +703,12 @@ namespace txte
             }
         }
 
-        KeyProcessingResults ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
+        async Task<KeyProcessingResults> ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Key)
             {
+                case ConsoleKey.Escape:
+                    return await this.OpenMenu();
                 case ConsoleKey.Home:
                     return this.DelegateProcessing(this.document.MoveHome);
                 case ConsoleKey.End:
@@ -591,9 +754,11 @@ namespace txte
             var yes = new Choice("Yes", 'y');
             var no = new Choice("No", 'n');
             var confirm = 
-                await ChoicePrompt(
-                    "File has unsaved changes. Quit without saving file?",
-                    new[] { yes, no }
+                await Prompt(
+                    new ChoosePromptInfo(
+                        "File has unsaved changes. Quit without saving?",
+                        new[] { yes, no }
+                    )
                 );
             if ((confirm ?? no) == yes)
             {
@@ -608,10 +773,12 @@ namespace txte
         async Task<KeyProcessingResults> SelectNewLine()
         {
             var selection = 
-                await ChoicePrompt(
-                    "Change dnd of line sequence:",
-                    NewLineFormat.All,
-                    this.document.NewLineFormat
+                await Prompt(
+                    new ChoosePromptInfo(
+                        "Change end of line sequence:",
+                        NewLineFormat.All,
+                        this.document.NewLineFormat
+                    )
                 );
             if (selection is NewLineFormat newLineFormat)
             {
@@ -626,10 +793,11 @@ namespace txte
         {
             try
             {
-                var savePath = this.document.Path ?? await this.InputPrompt("Save as (Esc to cancel):");
+                var savePath = 
+                    this.document.Path ?? await this.Prompt(new InputPromptInfo("Save as (Esc to cancel):"));
                 if (savePath == null)
                 {
-                    this.AddMessage("Save cancelled");
+                    this.AddMessage("Save is cancelled");
                     return KeyProcessingResults.Running;
                 }
                 this.document.Path = savePath;

@@ -40,8 +40,11 @@ namespace txte
         public static readonly ColorSet Fragment = 
             new ColorSet(ConsoleColor.Blue, ThemeColor.Foreground);
 
-        public static readonly ColorSet PromptMessage = 
-            new ColorSet(ConsoleColor.Yellow, ConsoleColor.DarkBlue);
+        public static readonly ColorSet SystemMessage = 
+            new ColorSet(ConsoleColor.White, ConsoleColor.DarkCyan);
+
+        public static readonly ColorSet KeyExpression = 
+            new ColorSet(ConsoleColor.Gray, ConsoleColor.DarkGray);
 
         public ColorSet(ThemeColor foreground, ThemeColor background)
         {
