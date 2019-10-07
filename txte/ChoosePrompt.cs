@@ -12,8 +12,8 @@ namespace txte
 
     class Choice : IChoice
     {
-        public static Choice Yes = new Choice("Yes", 'y');
-        public static Choice No = new Choice("No", 'n');
+        public static readonly Choice Yes = new Choice("Yes", 'y');
+        public static readonly Choice No = new Choice("No", 'n');
         
         public Choice(string name, char shortcut)
         {

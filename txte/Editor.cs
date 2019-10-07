@@ -14,6 +14,15 @@ namespace txte
         Quit,
         Unhandled,
     }
+    static class KeyProcessingTaskResult
+    {
+        public static readonly Task<KeyProcessingResults> Running = 
+            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Running).AsTask();
+        public static readonly Task<KeyProcessingResults> Quit = 
+            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Quit).AsTask();
+        public static readonly Task<KeyProcessingResults> Unhandled = 
+            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Unhandled).AsTask();
+    }
 
     class Editor
     {
@@ -25,9 +34,9 @@ namespace txte
             this.console = console;
             this.setting = setting;
             this.document = document;
-            this.prompt = new TemporaryValue<IPrompt>();
+            this.prompt = new Temporary<IPrompt>();
             this.message = firstMessage;
-            this.menu = new Menu(setting);
+            this.menu = new Menu(setting, SetupShortcuts(setting));
         }
 
         readonly IConsole console;
@@ -35,7 +44,7 @@ namespace txte
         public Message message;
 
         Document document;
-        TemporaryValue<IPrompt> prompt;
+        Temporary<IPrompt> prompt;
         EditorSetting setting;
 
         Size editArea => 
@@ -68,6 +77,26 @@ namespace txte
                 this.RefreshScreen(0);
             }
         }
+
+        KeyBind SetupShortcuts(EditorSetting setting) =>
+            new KeyBind
+            {
+                [new Shortcut(new ShortcutKey(ConsoleKey.F, false, true), "Find", setting)] = 
+                    this.Find,
+                [new Shortcut(new ShortcutKey(ConsoleKey.Q, false, true), "Quit", setting)] = 
+                    this.Quit,
+                [new Shortcut(new ShortcutKey(ConsoleKey.S, false, true), "Save", setting)] = 
+                    async () => this.document.Path == null ? await this.SaveAs() : await this.Save(),
+                [new Shortcut(new ShortcutKey(ConsoleKey.S, true, true), "Save As", setting)] = 
+                    this.SaveAs,
+                [new Shortcut(new ShortcutKey(ConsoleKey.L, false, true), "Refresh", setting)] = 
+                    () => this.DelegateTask(this.console.Clear),
+                [new Shortcut(new ShortcutKey(ConsoleKey.E, true, true), "Change East Asian Width", setting)] = 
+                    this.SwitchAmbiguousWidth,
+                [new Shortcut(new ShortcutKey(ConsoleKey.L, true, true), "Change End of Line sequence", setting)] = 
+                    this.SelectNewLine,
+            };
+
 
         void DiscardMessage()
         {
@@ -103,7 +132,7 @@ namespace txte
             for (int y = from; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
-                if (this.menu.IsShown)
+                if (this.menu.IsShown.Value)
                 {
                     this.DrawMenu(screen, y);
                 }
@@ -148,7 +177,7 @@ namespace txte
             var separator = "  ";
             var titleRowCount = 2;
 
-            if (y - titleRowCount >= this.menu.Items.Count)
+            if (y - titleRowCount >= this.menu.KeyBind.Shortcuts.Count)
             {
                 screen.AppendRow(new[]
                 { 
@@ -196,7 +225,7 @@ namespace txte
             }
             else
             {
-                var item = this.menu.Items[y - titleRowCount];
+                var item = this.menu.KeyBind.Shortcuts[y - titleRowCount];
 
                 var leftLength = item.effect.Length;
                 var rightLength = item.keys.Select(x => x.Length).Sum() + (item.keys.Length - 1) * keyJoiner.Length;
@@ -267,12 +296,11 @@ namespace txte
         }
         void DrawMessageBar(IScreen screen)
         {
-            if (this.message.IsValid)
-            {
-                var text = this.message.Value;
-                var textLength = text.Length.AtMax(this.console.Width);
-                screen.AppendRow(text.Substring(0, textLength));
-            }
+            if (!this.message.IsValid) { return; }
+
+            var text = this.message.Value;
+            var textLength = text.Length.AtMax(this.console.Width);
+            screen.AppendRow(text.Substring(0, textLength));
         }
         
         async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt) where TResult: class
@@ -297,106 +325,48 @@ namespace txte
 
         private async Task<KeyProcessingResults> OpenMenu()
         {
-            this.menu.IsShown = true;
+            using var _ = this.menu.IsShown.SaveValue();
+            this.menu.IsShown.Value = true;
             using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen.");
             this.message = message;
             this.RefreshScreen(0);
-            try
+
+            while (true)
             {
-                while (true)
-                {
-                    (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
-                    if (eventType == EventType.Timeout)
-                    { 
-                        this.DiscardMessage();
-                        continue;
-                    }
-                    if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
-                    this.menu.IsShown = false;
-                    switch (keyInfo.Modifiers)
-                    {
-                        case ConsoleModifiers.Control | ConsoleModifiers.Shift:
-                        case ConsoleModifiers.Shift:
-                        {
-                            if (await this.ProcessOptionShiftKeyPress(keyInfo) is var result && result != KeyProcessingResults.Unhandled)
-                            {
-                                return result;
-                            }
-                            break;
-                        }
-                        case ConsoleModifiers.Control:
-                        case (ConsoleModifiers)0:
-                        {
-                            if (await this.ProcessOptionKeyPress(keyInfo) is var result && result != KeyProcessingResults.Unhandled)
-                            {
-                                return result;
-                            }
-                            break;
-                        }
-                        default:
-                            break;
-                    }
-                    this.menu.IsShown = true;
-                    this.RefreshScreen(0);
+                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
+                if (eventType == EventType.Timeout)
+                { 
+                    this.DiscardMessage();
+                    continue;
                 }
-            }
-            finally
-            {
-                this.menu.IsShown = false;
+                if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
+                
+                if (this.menu.KeyBind[keyInfo.ToShortcutKey().WithControl()] is { } function)
+                {
+                    message.Expire();
+                    this.menu.IsShown.Value = false;
+                    return await function();
+                }
+
+                this.RefreshScreen(0);
             }
         }
 
         async Task<KeyProcessingResults> ProcessKeyPress(ConsoleKeyInfo keyInfo)
         {
+            if (this.menu.KeyBind[keyInfo.ToShortcutKey()] is { } function)
+            {
+                return await function();
+            }
+            
             switch (keyInfo.Modifiers)
             {
                 case ConsoleModifiers.Control | ConsoleModifiers.Shift:
-                    return await this.ProcessOptionShiftKeyPress(keyInfo);
                 case ConsoleModifiers.Control:
-                    return await this.ProcessOptionKeyPress(keyInfo);
                 case ConsoleModifiers.Shift:
                     return this.ProcessShiftKeyPress(keyInfo);
                 default:
                     return await this.ProcessSingleKeyPress(keyInfo);
-            }
-        }
-
-        async Task<KeyProcessingResults> ProcessOptionShiftKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.E:
-                    return this.SwitchAmbiguousWidth();
-
-                case ConsoleKey.L:
-                    return await this.SelectNewLine();
-
-                case ConsoleKey.S:
-                    return await this.SaveAs();
-
-                default:
-                    return KeyProcessingResults.Unhandled;
-            }
-        }
-
-        async Task<KeyProcessingResults> ProcessOptionKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.F:
-                    return await this.Find();
-
-                case ConsoleKey.Q:
-                    return await this.Quit();
-
-                case ConsoleKey.L:
-                    return this.DelegateProcessing(this.console.Clear);
-
-                case ConsoleKey.S:
-                    return this.document.Path == null ? await this.SaveAs() : await this.Save();
-
-                default:
-                    return KeyProcessingResults.Unhandled;
             }
         }
 
@@ -456,6 +426,12 @@ namespace txte
             }
         }
 
+        Task<KeyProcessingResults> DelegateTask(Action action)
+        {
+            action();
+            return KeyProcessingTaskResult.Running;
+        }
+
         KeyProcessingResults DelegateProcessing(Action action)
         {
             action();
@@ -473,7 +449,7 @@ namespace txte
                         new[] { Choice.No, Choice.Yes }
                     )
                 );
-            if ((confirm ?? Choice.No) == Choice.No)
+            if ((confirm ?? Choice.No) == Choice.Yes)
             {
                 return KeyProcessingResults.Quit;
             }
@@ -604,14 +580,14 @@ namespace txte
             return KeyProcessingResults.Running;
         }
 
-        KeyProcessingResults SwitchAmbiguousWidth()
+        Task<KeyProcessingResults> SwitchAmbiguousWidth()
         {
             this.setting.IsFullWidthAmbiguous = !this.setting.IsFullWidthAmbiguous;
             var ambiguousSize =
                 this.setting.IsFullWidthAmbiguous ? "Full Width"
                 : "Half Width";
             this.message = new Message($"East Asian Width / Ambiguous = {ambiguousSize}");
-            return KeyProcessingResults.Running;
+            return KeyProcessingTaskResult.Running;
         }
     }
 }

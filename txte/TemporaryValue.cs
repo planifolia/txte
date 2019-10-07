@@ -2,9 +2,9 @@ using System;
 
 namespace txte
 {
-    class TemporaryValue<T>
+    class Temporary<T>
     {
-        public TemporaryValue()
+        public Temporary()
         {
             this.value = default!;
         }
@@ -21,39 +21,49 @@ namespace txte
             return new DisposingToken(this);
         }
 
-        public class DisposingToken : IDisposable
+        public struct DisposingToken : IDisposable
         {
-            public DisposingToken(TemporaryValue<T> source)
+            public DisposingToken(Temporary<T> source)
             {
                 this.source = source;
             }
 
-            TemporaryValue<T> source;
-
-            #region IDisposable Support
-            private bool disposedValue = false;
-
-            protected virtual void Dispose(bool disposing)
-            {
-                if (!this.disposedValue)
-                {
-                    if (disposing)
-                    {
-                        this.source.HasValue = false;
-                        this.source.value = default!;
-                    }
-
-                    this.source = null!;
-
-                    disposedValue = true;
-                }
-            }
+            readonly Temporary<T> source;
 
             public void Dispose()
             {
-                Dispose(true);
+                this.source.HasValue = false;
+                this.source.value = default!;
             }
-            #endregion
+        }
+    }
+
+    class RecoverableValue<T> where T : struct
+    {
+        public RecoverableValue()
+        {
+            this.Value = default!;
+        }
+
+        public T Value { get; set; }
+
+        public MementoToken SaveValue() => new MementoToken(this);
+
+        public struct MementoToken : IDisposable
+        {
+            public MementoToken(RecoverableValue<T> source)
+            {
+                this.source = source;
+                this.savedValue = source.Value;
+            }
+
+            readonly RecoverableValue<T> source;
+            readonly T savedValue;
+
+            public void Dispose()
+            {
+                this.source.Value = this.savedValue;
+            }
         }
     }
 }
