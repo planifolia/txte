@@ -20,7 +20,7 @@ namespace txte
                 var setting = new EditorSetting();
                 var document =
                     (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
-                    : new Document();
+                    : new Document(setting);
                 var editor = new Editor(console, setting, document, new Message("hint: Esc Key to show menu."));
                 await editor.RunAsync();
                 return 0;

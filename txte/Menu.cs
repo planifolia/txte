@@ -2,13 +2,13 @@ namespace txte
 {
     class Menu
     {
-        public Menu(EditorSetting setting, KeyBind keyBind)
+        public Menu(EditorSetting setting, KeyBindSet keyBinds)
         {
             this.setting = setting;
-            this.KeyBind = keyBind;
+            this.KeyBinds = keyBinds;
         }
 
-        public readonly KeyBind KeyBind;
+        public readonly KeyBindSet KeyBinds;
         public bool IsShown => this.isShown.Value;
 
         readonly EditorSetting setting;

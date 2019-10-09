@@ -6,21 +6,46 @@ namespace txte
 {
     class KeyBind
     {
-        public IReadOnlyList<Shortcut> Shortcuts => this.shortcuts;
+        public KeyBind(KeyCombination combination, string explanation)
+        {
+            this.combination = combination;
+            var keys = new List<string>();
+            if (combination.Controled)
+            {
+                keys.Add("Ctrl");
+            }
+            if (combination.Shifted)
+            {
+                keys.Add("Shift");
+            }
+            keys.Add(combination.Key.ToString());
 
-        readonly List<Shortcut> shortcuts = new List<Shortcut>();
-        readonly Dictionary<ShortcutKey, Func<Task<KeyProcessingResults>>> functions =
-            new Dictionary<ShortcutKey, Func<Task<KeyProcessingResults>>>();
+            this.keys = keys.ToArray();
+            this.explanation = explanation;
+        }
+        
+        public readonly KeyCombination combination;
+        public readonly string[] keys;
+        public readonly string explanation;
+    }
 
-        public Func<Task<KeyProcessingResults>> this[Shortcut shortcut]
+    class KeyBindSet
+    {
+        public IReadOnlyList<KeyBind> KeyBinds => this.keyBinds;
+
+        readonly List<KeyBind> keyBinds = new List<KeyBind>();
+        readonly Dictionary<KeyCombination, Func<Task<KeyProcessingResults>>> functions =
+            new Dictionary<KeyCombination, Func<Task<KeyProcessingResults>>>();
+
+        public Func<Task<KeyProcessingResults>> this[KeyBind keyBind]
         {
             set {
-                this.shortcuts.Add(shortcut);
-                this.functions[shortcut.shortcutKey] = value;
+                this.keyBinds.Add(keyBind);
+                this.functions[keyBind.combination] = value;
             }
         }
         
-        public Func<Task<KeyProcessingResults>>? this[ShortcutKey shortcutKey]
+        public Func<Task<KeyProcessingResults>>? this[KeyCombination shortcutKey]
         {
             get =>
                 (this.functions.TryGetValue(shortcutKey, out var function)) ? function

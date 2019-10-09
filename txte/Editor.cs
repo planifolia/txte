@@ -8,22 +8,6 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    enum KeyProcessingResults
-    {
-        Running,
-        Quit,
-        Unhandled,
-    }
-    static class KeyProcessingTaskResult
-    {
-        public static readonly Task<KeyProcessingResults> Running = 
-            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Running).AsTask();
-        public static readonly Task<KeyProcessingResults> Quit = 
-            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Quit).AsTask();
-        public static readonly Task<KeyProcessingResults> Unhandled = 
-            new ValueTask<KeyProcessingResults>(KeyProcessingResults.Unhandled).AsTask();
-    }
-
     class Editor
     {
         public static string Version = "0.0.1";
@@ -35,12 +19,14 @@ namespace txte
             this.setting = setting;
             this.document = document;
             this.message = firstMessage;
-            this.menu = new Menu(setting, SetupShortcuts(setting));
+            this.menu = new Menu(setting, SetupShortcuts());
+            this.editKeyBinds = SetupEditKeyBinds();
         }
 
         readonly IConsole console;
         readonly EditorSetting setting;
         readonly Menu menu;
+        readonly KeyBindSet editKeyBinds;
         readonly Temporary<IPrompt> prompt = new Temporary<IPrompt>();
 
         Document document;
@@ -77,25 +63,61 @@ namespace txte
             }
         }
 
-        KeyBind SetupShortcuts(EditorSetting setting) =>
-            new KeyBind
+        KeyBindSet SetupShortcuts() =>
+            new KeyBindSet
             {
-                [new Shortcut(new ShortcutKey(ConsoleKey.F, false, true), "Find", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.F, false, true), "Find")] =
                     this.Find,
-                [new Shortcut(new ShortcutKey(ConsoleKey.Q, false, true), "Quit", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.Q, false, true), "Quit")] =
                     this.Quit,
-                [new Shortcut(new ShortcutKey(ConsoleKey.S, false, true), "Save", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.S, false, true), "Save")] =
                     this.Save,
-                [new Shortcut(new ShortcutKey(ConsoleKey.S, true, true), "Save As", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.S, true, true), "Save As")] =
                     this.SaveAs,
-                [new Shortcut(new ShortcutKey(ConsoleKey.L, false, true), "Refresh", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.L, false, true), "Refresh")] =
                     () => this.DelegateTask(this.console.Clear),
-                [new Shortcut(new ShortcutKey(ConsoleKey.E, true, true), "Change East Asian Width", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.E, true, true), "Change East Asian Width")] =
                     this.SwitchAmbiguousWidth,
-                [new Shortcut(new ShortcutKey(ConsoleKey.L, true, true), "Change End of Line sequence", setting)] = 
+                [new KeyBind(new KeyCombination(ConsoleKey.L, true, true), "Change End of Line sequence")] =
                     this.SelectNewLine,
             };
 
+        KeyBindSet SetupEditKeyBinds() =>
+            new KeyBindSet
+            {
+                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, false), "Move to Start of Line")] =
+                    () => this.DelegateTask(this.document.MoveHome),
+                [new KeyBind(new KeyCombination(ConsoleKey.End, false, false), "Move to End of Line")] =
+                    () => this.DelegateTask(this.document.MoveEnd),
+                [new KeyBind(new KeyCombination(ConsoleKey.Home, true, false), "Move to Start of File")] =
+                    () => this.DelegateTask(this.document.MoveStartOfFile),
+                [new KeyBind(new KeyCombination(ConsoleKey.End, true, false), "Move to End of File")] =
+                    () => this.DelegateTask(this.document.MoveEndOfFile),
+                [new KeyBind(new KeyCombination(ConsoleKey.PageUp, false, false), "Scroll to Previous Page")] =
+                    () => this.DelegateTask(() => this.document.MovePageUp(this.editArea.Height)),
+                [new KeyBind(new KeyCombination(ConsoleKey.PageDown, false, false), "Scroll to Next Page")] =
+                    () => this.DelegateTask(() => this.document.MovePageDown(this.editArea.Height)),
+                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, false), "Move Cursor Up")] =
+                    () => this.DelegateTask(this.document.MoveUp),
+                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, false), "Move Cursor Down")] =
+                    () => this.DelegateTask(this.document.MoveDown),
+                [new KeyBind(new KeyCombination(ConsoleKey.LeftArrow, false, false), "Move Cursor Left")] =
+                    () => this.DelegateTask(this.document.MoveLeft),
+                [new KeyBind(new KeyCombination(ConsoleKey.RightArrow, false, false), "Move Cursor Right")] =
+                    () => this.DelegateTask(this.document.MoveRight),
+                [new KeyBind(new KeyCombination(ConsoleKey.Enter, false, false), "Break Line")] =
+                    () => this.DelegateTask(this.document.InsertNewLine),
+                [new KeyBind(new KeyCombination(ConsoleKey.Backspace, false, false), "Delete a Left Letter")] =
+                    () => this.DelegateTask(this.document.BackSpace),
+                [new KeyBind(new KeyCombination(ConsoleKey.Delete, false, false), "Delete a Right Letter")] =
+                    () => this.DelegateTask(this.document.DeleteChar),
+            };
+
+        Task<KeyProcessingResults> DelegateTask(Action action)
+        {
+            action();
+            return KeyProcessingTaskResult.Running;
+        }
 
         async Task OpenDocumentAsync(string path)
         {
@@ -121,7 +143,7 @@ namespace txte
 
         void RefreshScreen(int from)
         {
-            this.document.UpdateOffset(this.editArea, this.setting);
+            this.document.UpdateOffset(this.editArea);
             this.console.RefreshScreen(
                 from.AtMin(0),
                 this.setting,
@@ -188,11 +210,10 @@ namespace txte
             var separator = "  ";
             var titleRowCount = 2;
 
-            if (y - titleRowCount >= this.menu.KeyBind.Shortcuts.Count)
+            if (y - titleRowCount >= this.menu.KeyBinds.KeyBinds.Count)
             {
                 screen.AppendRow(new[]
                 { 
-                    // new StyledString(new string(' ', this.console.Width), ColorSet.SystemMessage),
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
             }
@@ -229,23 +250,21 @@ namespace txte
             {
                 screen.AppendRow(new[]
                 { 
-                    // new StyledString(new string(' ', this.console.Width), ColorSet.SystemMessage),
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
                 return;
             }
             else
             {
-                var item = this.menu.KeyBind.Shortcuts[y - titleRowCount];
+                var item = this.menu.KeyBinds.KeyBinds[y - titleRowCount];
 
-                var leftLength = item.effect.Length;
+                var leftLength = item.explanation.Length;
                 var rightLength = item.keys.Select(x => x.Length).Sum() + (item.keys.Length - 1) * keyJoiner.Length;
                 var leftPadding = (this.console.Width - separator.Length) / 2 - leftLength - 1;
-                // var rightPadding = this.console.Width - leftLength - rightLength - leftPadding - 2;
                 var spans = new List<StyledString>();
                 spans.Add(new StyledString("~", ColorSet.OutOfBounds));
                 spans.Add(new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds));
-                spans.Add(new StyledString(item.effect, ColorSet.OutOfBounds));
+                spans.Add(new StyledString(item.explanation, ColorSet.OutOfBounds));
                 spans.Add(new StyledString(separator, ColorSet.OutOfBounds));
                 int i = 0;
                 foreach (var key in item.keys)
@@ -256,7 +275,6 @@ namespace txte
                     spans.Add(new StyledString(key, ColorSet.KeyExpression));
                     i++;
                 }
-                // spans.Add(new StyledString(new string(' ', rightPadding), ColorSet.SystemMessage));
                 screen.AppendRow(spans);
             }
         }
@@ -357,7 +375,7 @@ namespace txte
                 }
                 if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
                 
-                if (this.menu.KeyBind[keyInfo.ToShortcutKey().WithControl()] is { } function)
+                if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
                 {
                     message.Expire();
                     this.menu.Hide();
@@ -370,90 +388,24 @@ namespace txte
 
         async Task<KeyProcessingResults> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)
         {
-            if (this.menu.KeyBind[keyInfo.ToShortcutKey()] is { } function)
-            {
-                return await function();
-            }
             if (keyInfo is { Key: ConsoleKey.Escape, Modifiers: 0 })
             {
                 return await this.OpenMenu();
             }
-            
-            switch (keyInfo.Modifiers)
+            if (this.menu.KeyBinds[keyInfo.ToKeyCombination()] is { } shortcut)
             {
-                case ConsoleModifiers.Control | ConsoleModifiers.Shift:
-                case ConsoleModifiers.Control:
-                case ConsoleModifiers.Shift:
-                    return this.ProcessShiftKeyPress(keyInfo);
-                default:
-                    return this.ProcessSingleKeyPress(keyInfo);
+                return await shortcut();
             }
-        }
-
-        KeyProcessingResults ProcessShiftKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
+            if (this.editKeyBinds[keyInfo.ToKeyCombination()] is { } editKey)
             {
-                case ConsoleKey.Home:
-                    return this.DelegateProcessing(this.document.MoveStartOfFile);
-                case ConsoleKey.End:
-                    return this.DelegateProcessing(this.document.MoveEndOfFile);
-
-                default:
-                    if (char.IsControl(keyInfo.KeyChar))
-                    {
-                        return KeyProcessingResults.Unhandled;
-                    }
-                    return this.InsertChar(keyInfo.KeyChar);
+                return await editKey();
             }
-        }
-
-        KeyProcessingResults ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
-        {
-            switch (keyInfo.Key)
+            if (!char.IsControl(keyInfo.KeyChar))
             {
-                case ConsoleKey.Home:
-                    return this.DelegateProcessing(this.document.MoveHome);
-                case ConsoleKey.End:
-                    return this.DelegateProcessing(this.document.MoveEnd);
-
-                case ConsoleKey.PageUp:
-                case ConsoleKey.PageDown:
-                    return this.MovePage(keyInfo.Key);
-
-                case ConsoleKey.UpArrow:
-                case ConsoleKey.DownArrow:
-                case ConsoleKey.LeftArrow:
-                case ConsoleKey.RightArrow:
-                    return this.MoveCursor(keyInfo.Key);
-
-                case ConsoleKey.Enter:
-                    return this.DelegateProcessing(() => this.document.InsertNewLine(this.setting));
-
-                case ConsoleKey.Backspace:
-                    return this.DelegateProcessing(() => this.document.BackSpace(this.setting));
-                case ConsoleKey.Delete:
-                    return this.DelegateProcessing(() => this.document.DeleteChar(this.setting));
-                        
-                default:
-                    if (char.IsControl(keyInfo.KeyChar))
-                    {
-                        return KeyProcessingResults.Unhandled;
-                    }
-                    return this.InsertChar(keyInfo.KeyChar);
+                this.document.InsertChar(keyInfo.KeyChar);
+                return KeyProcessingResults.Running;
             }
-        }
-
-        Task<KeyProcessingResults> DelegateTask(Action action)
-        {
-            action();
-            return KeyProcessingTaskResult.Running;
-        }
-
-        KeyProcessingResults DelegateProcessing(Action action)
-        {
-            action();
-            return KeyProcessingResults.Running;
+            return KeyProcessingResults.Unhandled;
         }
 
         async Task<KeyProcessingResults> Quit()
@@ -475,25 +427,6 @@ namespace txte
             {
                 return KeyProcessingResults.Running;
             }
-        }
-
-        async Task<KeyProcessingResults> SelectNewLine()
-        {
-            var selection = 
-                await Prompt(
-                    new ChoosePrompt(
-                        "Change end of line sequence:",
-                        NewLineFormat.All,
-                        this.document.NewLineFormat
-                    )
-                );
-            if (selection is NewLineFormat newLineFormat)
-            {
-                this.document.NewLineFormat = newLineFormat;
-                return KeyProcessingResults.Running;
-            }
-
-            return KeyProcessingResults.Running;
         }
 
         async Task<KeyProcessingResults> Save() => 
@@ -561,43 +494,22 @@ namespace txte
             return KeyProcessingResults.Running;
         }
 
-        KeyProcessingResults InsertChar(char c)
+        async Task<KeyProcessingResults> SelectNewLine()
         {
-            this.document.InsertChar(c, this.setting);
-            return KeyProcessingResults.Running;
-        }
-
-        KeyProcessingResults MovePage(ConsoleKey key)
-        {
-            switch (key)
+            var selection = 
+                await Prompt(
+                    new ChoosePrompt(
+                        "Change end of line sequence:",
+                        NewLineFormat.All,
+                        this.document.NewLineFormat
+                    )
+                );
+            if (selection is NewLineFormat newLineFormat)
             {
-                case ConsoleKey.PageUp:
-                    this.document.MovePageUp(this.editArea.Height);
-                    break;
-                case ConsoleKey.PageDown:
-                    this.document.MovePageDown(this.editArea.Height);
-                    break;
+                this.document.NewLineFormat = newLineFormat;
+                return KeyProcessingResults.Running;
             }
-            return KeyProcessingResults.Running;
-        }
 
-        KeyProcessingResults MoveCursor(ConsoleKey key)
-        {
-            switch (key)
-            {
-                case ConsoleKey.LeftArrow:
-                    this.document.MoveLeft();
-                    break;
-                case ConsoleKey.RightArrow:
-                    this.document.MoveRight();
-                    break;
-                case ConsoleKey.UpArrow:
-                    this.document.MoveUp();
-                    break;
-                case ConsoleKey.DownArrow:
-                    this.document.MoveDown();
-                    break;
-            }
             return KeyProcessingResults.Running;
         }
 

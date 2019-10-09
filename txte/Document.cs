@@ -136,7 +136,7 @@ namespace txte
     {
         public static async Task<Document> OpenAsync(string path, EditorSetting setting)
         {
-            var doc = new Document
+            var doc = new Document(setting)
             {
                 Path = path
             };
@@ -162,13 +162,14 @@ namespace txte
 
         static readonly Regex AnyNewLinePattern = new Regex(@"\r\n|\r|\n");
 
-        public Document()
+        public Document(EditorSetting setting)
         {
             this.Path = null;
             this.NewLineFormat = NewLineFormat.FromSequence(Environment.NewLine);
             this.Rows = new List<Row> { };
             this.valuePosition = new Point(0, 0);
             this.offset = new Point(0, 0);
+            this.setting = setting;
         }
 
         public string? Path { get; set; }
@@ -181,6 +182,7 @@ namespace txte
         public Point Offset => this.offset;
         public bool IsModified => this.Rows.Any(x => x.IsModified);
 
+        readonly EditorSetting setting;
         int renderPositionX;
         Point valuePosition;
         Point offset;
@@ -216,18 +218,18 @@ namespace txte
             }
         }
 
-        public void InsertChar(char c, EditorSetting setting)
+        public void InsertChar(char c)
         {
             if (this.valuePosition.Y == this.Rows.Count)
             {
                 this.Rows.Add(new Row(""));
             }
             this.Rows[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
-            this.Rows[this.valuePosition.Y].UpdateRender(setting);
+            this.Rows[this.valuePosition.Y].UpdateRender(this.setting);
             this.MoveRight();
         }
 
-        public void InsertNewLine(EditorSetting setting)
+        public void InsertNewLine()
         {
             if (this.valuePosition.X == 0)
             {
@@ -248,14 +250,14 @@ namespace txte
                         this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
                         asNewLine: true
                     );
-                this.Rows[this.valuePosition.Y].UpdateRender(setting);
-                this.Rows[this.valuePosition.Y + 1].UpdateRender(setting);
+                this.Rows[this.valuePosition.Y].UpdateRender(this.setting);
+                this.Rows[this.valuePosition.Y + 1].UpdateRender(this.setting);
             }
             this.MoveHome();
             this.MoveDown();
         }
         
-        public void BackSpace(EditorSetting setting)
+        public void BackSpace()
         {
             var position = this.valuePosition;
 
@@ -281,18 +283,18 @@ namespace txte
                             this.Rows[position.Y - 1].Value + this.Rows[position.Y].Value,
                             asNewLine: true
                         );
-                    this.Rows[position.Y - 1].UpdateRender(setting);
+                    this.Rows[position.Y - 1].UpdateRender(this.setting);
                     this.Rows.RemoveAt(position.Y);
                 }
             }
             else
             {
                 this.Rows[position.Y].BackSpace(position.X);
-                this.Rows[position.Y].UpdateRender(setting);
+                this.Rows[position.Y].UpdateRender(this.setting);
             }
         }
 
-        public void DeleteChar(EditorSetting setting)
+        public void DeleteChar()
         {
             if (this.IsNew) { return; }
             if (this.valuePosition.Y == this.Rows.Count - 1 
@@ -302,7 +304,7 @@ namespace txte
             }
 
             this.MoveRight();
-            this.BackSpace(setting);
+            this.BackSpace();
         }
 
         public void MoveLeft()
@@ -428,19 +430,19 @@ namespace txte
             }
         }
 
-        public void UpdateOffset(Size editArea, EditorSetting setting)
+        public void UpdateOffset(Size editArea)
         {
             this.renderPositionX = 0;
             int overshoot = 0;
             if (this.valuePosition.Y < this.Rows.Count)
             {
                 this.renderPositionX =
-                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, setting);
+                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, this.setting);
                 if (this.valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
                 {
                     overshoot =
                         this.Rows[this.valuePosition.Y].Value[this.valuePosition.X]
-                        .GetEastAsianWidth(setting.IsFullWidthAmbiguous) - 1;
+                        .GetEastAsianWidth(this.setting.IsFullWidthAmbiguous) - 1;
                 }
             }
 
