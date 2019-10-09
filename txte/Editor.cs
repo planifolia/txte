@@ -34,18 +34,17 @@ namespace txte
             this.console = console;
             this.setting = setting;
             this.document = document;
-            this.prompt = new Temporary<IPrompt>();
             this.message = firstMessage;
             this.menu = new Menu(setting, SetupShortcuts(setting));
         }
 
         readonly IConsole console;
+        readonly EditorSetting setting;
         readonly Menu menu;
-        public Message message;
+        readonly Temporary<IPrompt> prompt = new Temporary<IPrompt>();
 
         Document document;
-        Temporary<IPrompt> prompt;
-        EditorSetting setting;
+        Message message;
 
         Size editArea => 
             new Size(
@@ -56,7 +55,7 @@ namespace txte
                 - 1
             );
 
-        public async Task Run()
+        public async Task RunAsync()
         {
             this.RefreshScreen(0);
             while (true)
@@ -67,7 +66,7 @@ namespace txte
                     this.DiscardMessage();
                     continue;
                 }
-                switch (await this.ProcessKeyPress(keyInfo))
+                switch (await this.ProcessKeyPressAsync(keyInfo))
                 {
                     case KeyProcessingResults.Quit:
                         return;
@@ -86,7 +85,7 @@ namespace txte
                 [new Shortcut(new ShortcutKey(ConsoleKey.Q, false, true), "Quit", setting)] = 
                     this.Quit,
                 [new Shortcut(new ShortcutKey(ConsoleKey.S, false, true), "Save", setting)] = 
-                    async () => this.document.Path == null ? await this.SaveAs() : await this.Save(),
+                    this.Save,
                 [new Shortcut(new ShortcutKey(ConsoleKey.S, true, true), "Save As", setting)] = 
                     this.SaveAs,
                 [new Shortcut(new ShortcutKey(ConsoleKey.L, false, true), "Refresh", setting)] = 
@@ -97,6 +96,18 @@ namespace txte
                     this.SelectNewLine,
             };
 
+
+        async Task OpenDocumentAsync(string path)
+        {
+            if (this.document.IsNew)
+            {
+                this.document = await Document.OpenAsync(path, this.setting);
+            }
+            else
+            {
+                throw new NotImplementedException("Document has already opened and other document is opened");
+            }
+        }
 
         void DiscardMessage()
         {
@@ -121,9 +132,9 @@ namespace txte
         void RenderScreen(IScreen screen, int from)
         {
             this.DrawEditorRows(screen, from);
+            this.DrawMessageBar(screen);
             this.DrawSatausBar(screen);
             this.DrawPromptBar(screen);
-            this.DrawMessageBar(screen);
         }
 
         void DrawEditorRows(IScreen screen, int from)
@@ -132,7 +143,7 @@ namespace txte
             for (int y = from; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
-                if (this.menu.IsShown.Value)
+                if (this.menu.IsShown)
                 {
                     this.DrawMenu(screen, y);
                 }
@@ -252,7 +263,7 @@ namespace txte
 
         void DrawOutofBounds(IScreen screen, int y)
         {
-            if (this.document.IsUntouched && y == this.editArea.Height / 3)
+            if (this.document.IsNew && y == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = welcome.Length.AtMax(this.console.Width);
@@ -300,7 +311,13 @@ namespace txte
 
             var text = this.message.Value;
             var textLength = text.Length.AtMax(this.console.Width);
-            screen.AppendRow(text.Substring(0, textLength));
+            (var render, _, _) = text.SubConsoleString(0, textLength, this.setting.IsFullWidthAmbiguous);
+            screen.AppendRow(new[]
+            {
+                new StyledString("~", ColorSet.OutOfBounds),
+                new StyledString(new string(' ', this.console.Width - render.GetConsoleLength(this.setting.IsFullWidthAmbiguous) - 1)),
+                new StyledString(render, ColorSet.OutOfBounds),
+            });
         }
         
         async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt) where TResult: class
@@ -325,8 +342,7 @@ namespace txte
 
         private async Task<KeyProcessingResults> OpenMenu()
         {
-            using var _ = this.menu.IsShown.SaveValue();
-            this.menu.IsShown.Value = true;
+            using var _ = this.menu.ShowWhileModal();
             using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen.");
             this.message = message;
             this.RefreshScreen(0);
@@ -344,7 +360,7 @@ namespace txte
                 if (this.menu.KeyBind[keyInfo.ToShortcutKey().WithControl()] is { } function)
                 {
                     message.Expire();
-                    this.menu.IsShown.Value = false;
+                    this.menu.Hide();
                     return await function();
                 }
 
@@ -352,11 +368,15 @@ namespace txte
             }
         }
 
-        async Task<KeyProcessingResults> ProcessKeyPress(ConsoleKeyInfo keyInfo)
+        async Task<KeyProcessingResults> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)
         {
             if (this.menu.KeyBind[keyInfo.ToShortcutKey()] is { } function)
             {
                 return await function();
+            }
+            if (keyInfo is { Key: ConsoleKey.Escape, Modifiers: 0 })
+            {
+                return await this.OpenMenu();
             }
             
             switch (keyInfo.Modifiers)
@@ -366,7 +386,7 @@ namespace txte
                 case ConsoleModifiers.Shift:
                     return this.ProcessShiftKeyPress(keyInfo);
                 default:
-                    return await this.ProcessSingleKeyPress(keyInfo);
+                    return this.ProcessSingleKeyPress(keyInfo);
             }
         }
 
@@ -388,12 +408,10 @@ namespace txte
             }
         }
 
-        async Task<KeyProcessingResults> ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
+        KeyProcessingResults ProcessSingleKeyPress(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo.Key)
             {
-                case ConsoleKey.Escape:
-                    return await this.OpenMenu();
                 case ConsoleKey.Home:
                     return this.DelegateProcessing(this.document.MoveHome);
                 case ConsoleKey.End:
@@ -478,7 +496,26 @@ namespace txte
             return KeyProcessingResults.Running;
         }
 
-        async Task<KeyProcessingResults> Save()
+        async Task<KeyProcessingResults> Save() => 
+            this.document.Path == null ? await this.SaveAs() : await this.SaveWithConfirm();
+
+        async Task<KeyProcessingResults> SaveAs()
+        {
+            using var message = new TemporaryMessage("hint: Esc to cancel");
+            this.message = message;
+            var savePath = await this.Prompt(new InputPrompt("Save as:"));
+            if (savePath == null)
+            {
+                this.message = new Message("Save is cancelled");
+                return KeyProcessingResults.Running;
+            }
+            
+            this.document.Path = savePath;
+            await this.SaveWithConfirm();
+            return KeyProcessingResults.Running;
+        }
+
+        async Task<KeyProcessingResults> SaveWithConfirm()
         {
             try
             {
@@ -506,28 +543,12 @@ namespace txte
             }
             return KeyProcessingResults.Running;
         }
-        
-        async Task<KeyProcessingResults> SaveAs()
-        {
-            var message = new Message("hint: Esc to cancel");
-            this.message = message;
-            var savePath = await this.Prompt(new InputPrompt("Save as:"));
-            if (savePath == null)
-            {
-                this.message = new Message("Save is cancelled");
-                return KeyProcessingResults.Running;
-            }
-            
-            this.document.Path = savePath;
-            await this.Save();
-            return KeyProcessingResults.Running;
-        }
 
         async Task<KeyProcessingResults> Find()
         {
-            var savedPosition = this.document.ValuePosition;
             using var message = new TemporaryMessage("hint: Esc to cancel");
             this.message = message;
+            var savedPosition = this.document.ValuePosition;
             var query = await this.Prompt(new InputPrompt("Search:", (x, _) => this.document.Find(x)));
             if (query != null)
             {

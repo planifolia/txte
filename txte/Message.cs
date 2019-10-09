@@ -26,7 +26,7 @@ namespace txte
         {
             if (this.createdTime + Message.expiration < now)
             {
-                this.IsValid = false;
+                this.Expire();
             }
         }
     }

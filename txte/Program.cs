@@ -16,13 +16,13 @@ namespace txte
                 using var console = 
                     (options.Contains("-e")) ? (IConsole) new ConsoleWithEscapeSequence()
                     : new CoreConsole();
-                
+
                 var setting = new EditorSetting();
                 var document =
                     (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
                     : new Document();
                 var editor = new Editor(console, setting, document, new Message("hint: Esc Key to show menu."));
-                await editor.Run();
+                await editor.RunAsync();
                 return 0;
             }
             catch(EditorException ex)

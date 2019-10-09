@@ -173,7 +173,7 @@ namespace txte
 
         public string? Path { get; set; }
         public NewLineFormat NewLineFormat { get; set; }
-        public bool IsUntouched => this.Rows.Count == 0;
+        public bool IsNew => this.Rows.Count == 0;
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
@@ -294,7 +294,7 @@ namespace txte
 
         public void DeleteChar(EditorSetting setting)
         {
-            if (this.IsUntouched) { return; }
+            if (this.IsNew) { return; }
             if (this.valuePosition.Y == this.Rows.Count - 1 
                 && this.valuePosition.X == this.Rows[^1].Value.Length)
             {
@@ -354,7 +354,7 @@ namespace txte
         }
         void ClampPosition()
         {
-            if (this.IsUntouched)
+            if (this.IsNew)
             {
                 this.valuePosition.X = 0;
                 this.valuePosition.Y = 0;
