@@ -17,11 +17,11 @@ namespace txte
                     (options.Contains("-e")) ? (IConsole) new ConsoleWithEscapeSequence()
                     : new CoreConsole();
 
-                var setting = new EditorSetting();
+                var setting = new Setting();
                 var document =
                     (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
                     : new Document(setting);
-                var editor = new Editor(console, setting, document, new Message("hint: Esc Key to show menu."));
+                var editor = new Editor(console, setting, document, new Message("hint: Esc key to show menu"));
                 await editor.RunAsync();
                 return 0;
             }

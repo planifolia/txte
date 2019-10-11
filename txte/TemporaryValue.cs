@@ -38,9 +38,9 @@ namespace txte
         }
     }
 
-    class RecoverableValue<T> where T : struct
+    class RestorableValue<T> where T : struct
     {
-        public RecoverableValue()
+        public RestorableValue()
         {
             this.Value = default!;
         }
@@ -51,18 +51,23 @@ namespace txte
 
         public struct MementoToken : IDisposable
         {
-            public MementoToken(RecoverableValue<T> source)
+            public MementoToken(RestorableValue<T> source)
             {
                 this.source = source;
                 this.savedValue = source.Value;
             }
 
-            readonly RecoverableValue<T> source;
+            readonly RestorableValue<T> source;
             readonly T savedValue;
 
-            public void Dispose()
+            public void Restore()
             {
                 this.source.Value = this.savedValue;
+            }
+
+            void IDisposable.Dispose()
+            {
+                this.Restore();
             }
         }
     }

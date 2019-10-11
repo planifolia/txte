@@ -53,7 +53,7 @@ namespace txte
 
         public void RefreshScreen(
             int from,
-            EditorSetting setting,
+            Setting setting,
             Action<IScreen, int> RenderScreen,
             Point cursor)
         {

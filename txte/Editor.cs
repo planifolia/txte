@@ -13,7 +13,7 @@ namespace txte
         public static string Version = "0.0.1";
 
 
-        public Editor(IConsole console, EditorSetting setting, Document document, Message firstMessage)
+        public Editor(IConsole console, Setting setting, Document document, Message firstMessage)
         {
             this.console = console;
             this.setting = setting;
@@ -24,7 +24,7 @@ namespace txte
         }
 
         readonly IConsole console;
-        readonly EditorSetting setting;
+        readonly Setting setting;
         readonly Menu menu;
         readonly KeyBindSet editKeyBinds;
         readonly Temporary<IPrompt> prompt = new Temporary<IPrompt>();
@@ -49,12 +49,12 @@ namespace txte
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 { 
-                    this.DiscardMessage();
+                    this.FadeMessage();
                     continue;
                 }
                 switch (await this.ProcessKeyPressAsync(keyInfo))
                 {
-                    case KeyProcessingResults.Quit:
+                    case ProcessResult.Quit:
                         return;
                     default:
                         break;
@@ -79,7 +79,7 @@ namespace txte
                 [new KeyBind(new KeyCombination(ConsoleKey.E, true, true), "Change East Asian Width")] =
                     this.SwitchAmbiguousWidth,
                 [new KeyBind(new KeyCombination(ConsoleKey.L, true, true), "Change End of Line sequence")] =
-                    this.SelectNewLine,
+                    this.ChangeEndOfLine,
             };
 
         KeyBindSet SetupEditKeyBinds() =>
@@ -113,10 +113,10 @@ namespace txte
                     () => this.DelegateTask(this.document.DeleteChar),
             };
 
-        Task<KeyProcessingResults> DelegateTask(Action action)
+        Task<ProcessResult> DelegateTask(Action action)
         {
             action();
-            return KeyProcessingTaskResult.Running;
+            return ProcessTaskResult.Running;
         }
 
         async Task OpenDocumentAsync(string path)
@@ -131,7 +131,7 @@ namespace txte
             }
         }
 
-        void DiscardMessage()
+        void FadeMessage()
         {
             var editAreaHeight = this.editArea.Height;
             this.message.CheckExpiration(DateTime.Now);
@@ -219,7 +219,7 @@ namespace txte
             }
             else if (y == 0)
             {
-                var message = "Menu / Shortcuts";
+                var message = "Shortcuts";
                 var messageLength = message.Length;
                 var leftPadding = (this.console.Width - messageLength) / 2 - 1;
                 screen.AppendRow(new[]
@@ -338,31 +338,44 @@ namespace txte
             });
         }
         
-        async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt) where TResult: class
+        async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt, bool needsUpdateEditArea)
+            where TResult: class
         {
             using var _ = this.prompt.SetTemporary(prompt);
+
             this.RefreshScreen(0);
             while (true)
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 { 
-                    this.DiscardMessage();
+                    this.FadeMessage();
                     continue;
                 }
+
                 (var state, var input) = prompt.ProcessKey(keyInfo);
-                if (state == KeyProcessingResults.Quit) { return input; }
-                this.RefreshScreen(0);
-                //this.RefreshScreen(this.editArea.Height);
+                if (state == ModalProcessResult.Ok) { return input; }
+                if (state == ModalProcessResult.Cancel) { return null; }
+
+                if (needsUpdateEditArea)
+                {
+                    this.RefreshScreen(0);
+                }
+                else
+                {
+                    this.RefreshScreen(editArea.Height);
+                }
             }
         }
         
 
-        private async Task<KeyProcessingResults> OpenMenu()
+        private async Task<ProcessResult> OpenMenu()
         {
             using var _ = this.menu.ShowWhileModal();
-            using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen.");
+
+            using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen");
             this.message = message;
+
             this.RefreshScreen(0);
 
             while (true)
@@ -370,10 +383,10 @@ namespace txte
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 { 
-                    this.DiscardMessage();
+                    this.FadeMessage();
                     continue;
                 }
-                if (keyInfo.Key == ConsoleKey.Escape) { return KeyProcessingResults.Running; }
+                if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
                 
                 if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
                 {
@@ -386,69 +399,76 @@ namespace txte
             }
         }
 
-        async Task<KeyProcessingResults> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)
+        async Task<ProcessResult> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)
         {
             if (keyInfo is { Key: ConsoleKey.Escape, Modifiers: 0 })
             {
                 return await this.OpenMenu();
             }
-            if (this.menu.KeyBinds[keyInfo.ToKeyCombination()] is { } shortcut)
+
+            var KeyCombination = keyInfo.ToKeyCombination();
+            if (this.menu.KeyBinds[KeyCombination] is { } shortcut)
             {
                 return await shortcut();
             }
-            if (this.editKeyBinds[keyInfo.ToKeyCombination()] is { } editKey)
+            if (this.editKeyBinds[KeyCombination] is { } editKey)
             {
                 return await editKey();
             }
-            if (!char.IsControl(keyInfo.KeyChar))
+
+            var keyChar = keyInfo.KeyChar;
+            if (!char.IsControl(keyChar))
             {
-                this.document.InsertChar(keyInfo.KeyChar);
-                return KeyProcessingResults.Running;
+                this.document.InsertChar(keyChar);
+                return ProcessResult.Running;
             }
-            return KeyProcessingResults.Unhandled;
+
+            return ProcessResult.Unhandled;
         }
 
-        async Task<KeyProcessingResults> Quit()
+        async Task<ProcessResult> Quit()
         {
-            if (!this.document.IsModified) { return KeyProcessingResults.Quit; }
+            if (!this.document.IsModified) { return ProcessResult.Quit; }
 
             var confirm = 
                 await Prompt(
-                    new ChoosePrompt(
+                    ChoosePrompt.Create(
                         "File has unsaved changes. Quit without saving?",
                         new[] { Choice.No, Choice.Yes }
-                    )
+                    ),
+                    false
                 );
             if ((confirm ?? Choice.No) == Choice.Yes)
             {
-                return KeyProcessingResults.Quit;
+                return ProcessResult.Quit;
             }
             else
             {
-                return KeyProcessingResults.Running;
+                return ProcessResult.Running;
             }
         }
 
-        async Task<KeyProcessingResults> Save() => 
-            this.document.Path == null ? await this.SaveAs() : await this.SaveWithConfirm();
+        async Task<ProcessResult> Save() => 
+            await ((this.document.Path == null) ? this.SaveAs() : this.SaveWithConfirm());
 
-        async Task<KeyProcessingResults> SaveAs()
+        async Task<ProcessResult> SaveAs()
         {
             using var message = new TemporaryMessage("hint: Esc to cancel");
             this.message = message;
-            var savePath = await this.Prompt(new InputPrompt("Save as:"));
+
+            var savePath = await this.Prompt(new InputPrompt("Save as:"), false);
             if (savePath == null)
             {
                 this.message = new Message("Save is cancelled");
-                return KeyProcessingResults.Running;
+                return ProcessResult.Running;
             }
             
             this.document.Path = savePath;
             await this.SaveWithConfirm();
-            return KeyProcessingResults.Running;
+            return ProcessResult.Running;
         }
 
-        async Task<KeyProcessingResults> SaveWithConfirm()
+        async Task<ProcessResult> SaveWithConfirm()
         {
             try
             {
@@ -456,15 +476,16 @@ namespace txte
                 {
                     var confirm = 
                         await Prompt(
-                            new ChoosePrompt(
+                            ChoosePrompt.Create(
                                 "Override?",
                                 new[] { Choice.No, Choice.Yes }
-                            )
+                            ),
+                            false
                         );
                     if ((confirm ?? Choice.No) == Choice.No)
                     {
                         this.message = new Message("Save is cancelled");
-                        return KeyProcessingResults.Running;
+                        return ProcessResult.Running;
                     }
                 }
                 this.document.Save();
@@ -474,15 +495,15 @@ namespace txte
             {
                 this.message = new Message(ex.Message);
             }
-            return KeyProcessingResults.Running;
+            return ProcessResult.Running;
         }
 
-        async Task<KeyProcessingResults> Find()
+        async Task<ProcessResult> Find()
         {
             using var message = new TemporaryMessage("hint: Esc to cancel");
             this.message = message;
             var savedPosition = this.document.ValuePosition;
-            var query = await this.Prompt(new InputPrompt("Search:", (x, _) => this.document.Find(x)));
+            var query = await this.Prompt(new InputPrompt("Search:", (x, _) => this.document.Find(x)), true);
             if (query != null)
             {
                 this.document.Find(query);
@@ -491,36 +512,48 @@ namespace txte
             {
                 this.document.ValuePosition = savedPosition;
             }
-            return KeyProcessingResults.Running;
+            return ProcessResult.Running;
         }
 
-        async Task<KeyProcessingResults> SelectNewLine()
+        async Task<ProcessResult> ChangeEndOfLine()
         {
             var selection = 
                 await Prompt(
-                    new ChoosePrompt(
-                        "Change end of line sequence:",
-                        NewLineFormat.All,
+                    ChoosePrompt.Create(
+                        "Change End of Line sequence:",
+                        EndOfLineFormat.All,
                         this.document.NewLineFormat
-                    )
+                    ),
+                    false
                 );
-            if (selection is NewLineFormat newLineFormat)
+            if (selection != null)
             {
-                this.document.NewLineFormat = newLineFormat;
-                return KeyProcessingResults.Running;
+                this.document.NewLineFormat = selection;
             }
 
-            return KeyProcessingResults.Running;
+            return ProcessResult.Running;
         }
 
-        Task<KeyProcessingResults> SwitchAmbiguousWidth()
+        async Task<ProcessResult> SwitchAmbiguousWidth()
         {
-            this.setting.IsFullWidthAmbiguous = !this.setting.IsFullWidthAmbiguous;
-            var ambiguousSize =
-                this.setting.IsFullWidthAmbiguous ? "Full Width"
-                : "Half Width";
-            this.message = new Message($"East Asian Width / Ambiguous = {ambiguousSize}");
-            return KeyProcessingTaskResult.Running;
+            using var message = new TemporaryMessage("hint: Set according to your terminal font. Usually Half-Width");
+            this.message = message;
+            var selection = 
+                await Prompt(
+                    ChoosePrompt.Create(
+                        "Change East Asian Width - Ambiguous:",
+                        EAWAmbiguousFormat.All,
+                        EAWAmbiguousFormat.FromSetting(this.setting.IsFullWidthAmbiguous)
+                    ),
+                    false
+                );
+            if (selection != null)
+            {
+                this.setting.IsFullWidthAmbiguous = selection.IsFullWidthAmbiguous;
+                this.message = new Message($"East Asian Width - Ambiguous = {selection}");
+            }
+
+            return ProcessResult.Running;
         }
     }
 }

@@ -20,25 +20,25 @@ namespace txte
 
         public string Current => this.input.ToString();
 
-        public (KeyProcessingResults, string?) ProcessKey(ConsoleKeyInfo keyInfo)
+        public (ModalProcessResult, string?) ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
                 case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
                     this.input.Length = (input.Length - 1).AtMin(0);
                     this.callback?.Invoke(this.input.ToString(), keyInfo);
-                    return (KeyProcessingResults.Running, default);
+                    return (ModalProcessResult.Running, default);
                 case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, default);
+                    return (ModalProcessResult.Cancel, default);
                 case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, this.input.ToString());
+                    return (ModalProcessResult.Ok, this.input.ToString());
                 default:
                     if (!char.IsControl(keyInfo.KeyChar))
                     { 
                         this.input.Append(keyInfo.KeyChar);
                         this.callback?.Invoke(this.input.ToString(), keyInfo);
                     }
-                    return (KeyProcessingResults.Running, default);
+                    return (ModalProcessResult.Unhandled, default);
             }
         }
 

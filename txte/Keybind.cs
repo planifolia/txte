@@ -34,10 +34,10 @@ namespace txte
         public IReadOnlyList<KeyBind> KeyBinds => this.keyBinds;
 
         readonly List<KeyBind> keyBinds = new List<KeyBind>();
-        readonly Dictionary<KeyCombination, Func<Task<KeyProcessingResults>>> functions =
-            new Dictionary<KeyCombination, Func<Task<KeyProcessingResults>>>();
+        readonly Dictionary<KeyCombination, Func<Task<ProcessResult>>> functions =
+            new Dictionary<KeyCombination, Func<Task<ProcessResult>>>();
 
-        public Func<Task<KeyProcessingResults>> this[KeyBind keyBind]
+        public Func<Task<ProcessResult>> this[KeyBind keyBind]
         {
             set {
                 this.keyBinds.Add(keyBind);
@@ -45,11 +45,11 @@ namespace txte
             }
         }
         
-        public Func<Task<KeyProcessingResults>>? this[KeyCombination shortcutKey]
+        public Func<Task<ProcessResult>>? this[KeyCombination shortcutKey]
         {
             get =>
                 (this.functions.TryGetValue(shortcutKey, out var function)) ? function
-                : (Func<Task<KeyProcessingResults>>?)null;
+                : (Func<Task<ProcessResult>>?)null;
         }
     }
 }

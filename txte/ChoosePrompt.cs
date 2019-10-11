@@ -24,9 +24,18 @@ namespace txte
         public char Shortcut { get; } 
     }
 
-    class ChoosePrompt : IPrompt<IChoice>
+    static class ChoosePrompt
     {
-        public ChoosePrompt(string message, IReadOnlyList<IChoice> choices, IChoice? default_choice = null)
+        public static ChoosePrompt<TChoice> Create<TChoice>(
+            string message, IReadOnlyList<TChoice> choices, TChoice? default_choice = null
+        ) where TChoice : class, IChoice =>
+            new ChoosePrompt<TChoice>(message, choices, default_choice);
+        
+    }
+
+    class ChoosePrompt<TChoice> : IPrompt<TChoice> where TChoice : class, IChoice
+    {
+        public ChoosePrompt(string message, IReadOnlyList<TChoice> choices, TChoice? default_choice = null)
         {
             this.message = message;
             this.choices = choices;
@@ -46,33 +55,33 @@ namespace txte
         }
 
         readonly string message;
-        readonly IReadOnlyList<IChoice> choices;
+        readonly IReadOnlyList<TChoice> choices;
         int choosenIndex;
 
-        public IChoice Choosen => this.choices[this.choosenIndex];
+        public TChoice Choosen => this.choices[this.choosenIndex];
 
-        public (KeyProcessingResults, IChoice?) ProcessKey(ConsoleKeyInfo keyInfo)
+        public (ModalProcessResult, TChoice?) ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
                 case { Key: ConsoleKey.LeftArrow, Modifiers: (ConsoleModifiers)0 }:
                     this.MoveLeft();
-                    return (KeyProcessingResults.Running, default);
+                    return (ModalProcessResult.Running, default);
                 case { Key: ConsoleKey.RightArrow, Modifiers: (ConsoleModifiers)0 }:
                     this.MoveRight();
-                    return (KeyProcessingResults.Running, default);
+                    return (ModalProcessResult.Running, default);
                 case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, default);
+                    return (ModalProcessResult.Cancel, default);
                 case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (KeyProcessingResults.Quit, this.Choosen);
+                    return (ModalProcessResult.Ok, this.Choosen);
                 default:
                     if (this.AcceptShortcut(keyInfo.KeyChar) is { } choosen)
                     {
-                        return (KeyProcessingResults.Quit, choosen);
+                        return (ModalProcessResult.Ok, choosen);
                     }
                     else
                     {
-                    return (KeyProcessingResults.Running, default);
+                        return (ModalProcessResult.Unhandled, default);
                     }
             }
         }
@@ -108,7 +117,7 @@ namespace txte
             this.choosenIndex = (this.choosenIndex + 1) % choiceCount;
         }
 
-        IChoice? AcceptShortcut(char keyChar)
+        TChoice? AcceptShortcut(char keyChar)
         {
             foreach (var choice in this.choices)
             {

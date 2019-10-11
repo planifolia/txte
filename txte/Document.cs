@@ -9,22 +9,22 @@ using System.Threading.Tasks;
 
 namespace txte
 {
-    class NewLineFormat : IChoice
+    class EndOfLineFormat : IChoice
     {
-        public static readonly NewLineFormat LF = new NewLineFormat("LF", "\n", 'l');
-        public static readonly NewLineFormat CR = new NewLineFormat("CR", "\r", 'm');
-        public static readonly NewLineFormat CRLF = new NewLineFormat("CRLF", "\r\n", 'w');
+        public static readonly EndOfLineFormat LF = new EndOfLineFormat("LF", "\n", 'l');
+        public static readonly EndOfLineFormat CR = new EndOfLineFormat("CR", "\r", 'm');
+        public static readonly EndOfLineFormat CRLF = new EndOfLineFormat("CRLF", "\r\n", 'w');
 
-        public static readonly IReadOnlyList<NewLineFormat> All =
-            new NewLineFormat[] { LF, CR, CRLF };
+        public static readonly IReadOnlyList<EndOfLineFormat> All =
+            new EndOfLineFormat[] { LF, CR, CRLF };
 
-        public static NewLineFormat FromSequence(string sequence) => 
+        public static EndOfLineFormat FromSequence(string sequence) => 
             sequence switch
             {
-                "\n" => NewLineFormat.LF,
-                "\r" => NewLineFormat.CR,
-                "\r\n" => NewLineFormat.CRLF,
-                _ => throw new Exception($"The new line format is not supported: {NewLineFormat.ToHexadecimals(sequence)}({sequence.Length} chars)"),
+                "\n" => EndOfLineFormat.LF,
+                "\r" => EndOfLineFormat.CR,
+                "\r\n" => EndOfLineFormat.CRLF,
+                _ => throw new Exception($"The new line format is not supported: {EndOfLineFormat.ToHexadecimals(sequence)}({sequence.Length} chars)"),
             };
         static string ToHexadecimals(string sequence) =>
             string.Concat(sequence.Select(x => $"0x{(int)x:X}"));
@@ -36,7 +36,7 @@ namespace txte
 
         public override string ToString() => this.Sequence;
 
-        private NewLineFormat(string name, string sequence, char shortcut)
+        private EndOfLineFormat(string name, string sequence, char shortcut)
         {
             this.Name = name;
             this.Sequence = sequence;
@@ -78,7 +78,7 @@ namespace txte
             this.IsModified = false;
         }
 
-        public void UpdateRender(EditorSetting setting)
+        public void UpdateRender(Setting setting)
         {
             var tabSize = setting.TabSize;
             var renderBuilder = new StringBuilder();
@@ -97,7 +97,7 @@ namespace txte
             this.Render = renderBuilder.ToString();
         }
 
-        public int ValueXToRenderX(int valueX, EditorSetting setting)
+        public int ValueXToRenderX(int valueX, Setting setting)
         {
             int tabSize = setting.TabSize;
             bool ambiguousSetting = setting.IsFullWidthAmbiguous;
@@ -113,7 +113,7 @@ namespace txte
             return renderX;
         }
         
-        public int RenderXToValueX(int renderX, EditorSetting setting)
+        public int RenderXToValueX(int renderX, Setting setting)
         {   
             int tabSize = setting.TabSize;
             bool ambiguousSetting = setting.IsFullWidthAmbiguous;
@@ -134,7 +134,7 @@ namespace txte
 
     class Document
     {
-        public static async Task<Document> OpenAsync(string path, EditorSetting setting)
+        public static async Task<Document> OpenAsync(string path, Setting setting)
         {
             var doc = new Document(setting)
             {
@@ -145,7 +145,7 @@ namespace txte
             var text = await reader.ReadToEndAsync();
             var newLine = AnyNewLinePattern.Match(text);
             if (newLine.Success) {
-                doc.NewLineFormat = NewLineFormat.FromSequence(newLine.Value);
+                doc.NewLineFormat = EndOfLineFormat.FromSequence(newLine.Value);
             }
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
@@ -162,10 +162,10 @@ namespace txte
 
         static readonly Regex AnyNewLinePattern = new Regex(@"\r\n|\r|\n");
 
-        public Document(EditorSetting setting)
+        public Document(Setting setting)
         {
             this.Path = null;
-            this.NewLineFormat = NewLineFormat.FromSequence(Environment.NewLine);
+            this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
             this.Rows = new List<Row> { };
             this.valuePosition = new Point(0, 0);
             this.offset = new Point(0, 0);
@@ -173,7 +173,7 @@ namespace txte
         }
 
         public string? Path { get; set; }
-        public NewLineFormat NewLineFormat { get; set; }
+        public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew => this.Rows.Count == 0;
         public List<Row> Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
@@ -182,7 +182,7 @@ namespace txte
         public Point Offset => this.offset;
         public bool IsModified => this.Rows.Any(x => x.IsModified);
 
-        readonly EditorSetting setting;
+        readonly Setting setting;
         int renderPositionX;
         Point valuePosition;
         Point offset;
