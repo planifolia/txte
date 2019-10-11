@@ -1,29 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using txte.State;
+using txte.Text;
 
-namespace txte
+namespace txte.Prompts
 {
-    interface IChoice
-    {
-        string Name { get; }
-        char Shortcut { get; } 
-    }
-
-    class Choice : IChoice
-    {
-        public static readonly Choice Yes = new Choice("Yes", 'y');
-        public static readonly Choice No = new Choice("No", 'n');
-        
-        public Choice(string name, char shortcut)
-        {
-            this.Name = name;
-            this.Shortcut = shortcut;
-        }
-        public string Name { get; }
-        public char Shortcut { get; } 
-    }
-
     static class ChoosePrompt
     {
         public static ChoosePrompt<TChoice> Create<TChoice>(

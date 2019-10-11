@@ -4,8 +4,10 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using txte.Settings;
+using txte.Text;
 
-namespace txte
+namespace txte.ConsoleInterface
 {
     class ConsoleWithEscapeSequence : IConsole
     {

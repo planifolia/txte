@@ -1,7 +1,6 @@
 using System;
-using System.Collections.Generic;
 
-namespace txte
+namespace txte.Input
 {
     struct KeyCombination
     {

@@ -1,6 +1,6 @@
 using System;
 
-namespace txte
+namespace txte.TextEditor
 {
     class Message
     {

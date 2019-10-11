@@ -1,4 +1,4 @@
-namespace txte
+namespace txte.Text
 {
     static class EastAsianWidthInfo
     {

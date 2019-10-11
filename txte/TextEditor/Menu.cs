@@ -1,17 +1,17 @@
-namespace txte
+using txte.Input;
+
+namespace txte.TextEditor
 {
     class Menu
     {
-        public Menu(Setting setting, KeyBindSet keyBinds)
+        public Menu(KeyBindSet keyBinds)
         {
-            this.setting = setting;
             this.KeyBinds = keyBinds;
         }
 
         public readonly KeyBindSet KeyBinds;
         public bool IsShown => this.isShown.Value;
 
-        readonly Setting setting;
         readonly RestorableValue<bool> isShown = new RestorableValue<bool>();
 
         public RestorableValue<bool>.MementoToken ShowWhileModal()

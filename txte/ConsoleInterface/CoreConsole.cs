@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
+using txte.Settings;
+using txte.Text;
 
-namespace txte
+namespace txte.ConsoleInterface
 {
     class CoreConsole : IConsole
     {

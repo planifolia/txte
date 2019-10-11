@@ -1,6 +1,6 @@
 using System;
 
-namespace txte
+namespace txte.Text
 {
     enum ColorType
     {

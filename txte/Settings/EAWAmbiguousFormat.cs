@@ -1,13 +1,7 @@
 using System.Collections.Generic;
 
-namespace txte
+namespace txte.Settings
 {
-    class Setting
-    {
-        public bool IsFullWidthAmbiguous { get; set; } = false;
-        public int TabSize { get; set; } = 4;
-    }
-    
     class EAWAmbiguousFormat : IChoice
     {
         public static readonly EAWAmbiguousFormat HalfWidth = new EAWAmbiguousFormat("Half-Width", false, 'h');

@@ -5,8 +5,15 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using txte.Settings;
+using txte.State;
+using txte.Input;
+using txte.Text;
+using txte.ConsoleInterface;
+using txte.TextDocument;
+using txte.Prompts;
 
-namespace txte
+namespace txte.TextEditor
 {
     class Editor
     {
@@ -19,7 +26,7 @@ namespace txte
             this.setting = setting;
             this.document = document;
             this.message = firstMessage;
-            this.menu = new Menu(setting, SetupShortcuts());
+            this.menu = new Menu(SetupShortcuts());
             this.editKeyBinds = SetupEditKeyBinds();
         }
 

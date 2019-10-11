@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace txte
+namespace txte.ConsoleInterface
 {
 
     class CoreConsoleKeyReader : IDisposable

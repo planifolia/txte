@@ -65,7 +65,7 @@ var eawInfo =
     .Reverse()
     .ToArray();
 #>
-namespace txte
+namespace txte.Text
 {
     static class EastAsianWidthInfo
     {

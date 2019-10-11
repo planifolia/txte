@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using txte.Settings;
+using txte.ConsoleInterface;
+using txte.TextDocument;
+using txte.TextEditor;
 
 namespace txte
 {
