@@ -60,28 +60,28 @@ namespace txte
 
         public TChoice Choosen => this.choices[this.choosenIndex];
 
-        public (ModalProcessResult, TChoice?) ProcessKey(ConsoleKeyInfo keyInfo)
+        public IModalProcessResult<TChoice> ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
                 case { Key: ConsoleKey.LeftArrow, Modifiers: (ConsoleModifiers)0 }:
                     this.MoveLeft();
-                    return (ModalProcessResult.Running, default);
+                    return ModalRunning<TChoice>.Default;
                 case { Key: ConsoleKey.RightArrow, Modifiers: (ConsoleModifiers)0 }:
                     this.MoveRight();
-                    return (ModalProcessResult.Running, default);
+                    return ModalRunning<TChoice>.Default;
                 case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return (ModalProcessResult.Cancel, default);
+                    return ModalCancel<TChoice>.Default;
                 case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return (ModalProcessResult.Ok, this.Choosen);
+                    return new ModalOk<TChoice>(this.Choosen);
                 default:
                     if (this.AcceptShortcut(keyInfo.KeyChar) is { } choosen)
                     {
-                        return (ModalProcessResult.Ok, choosen);
+                        return new ModalOk<TChoice>(choosen);
                     }
                     else
                     {
-                        return (ModalProcessResult.Unhandled, default);
+                        return ModalUnhandled<TChoice>.Default;
                     }
             }
         }

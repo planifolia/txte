@@ -9,6 +9,14 @@ using System.Threading.Tasks;
 
 namespace txte
 {
+    
+
+    struct FindingStatus
+    {
+        public int LastMatch;
+        public int Direction;
+    }
+    
     class EndOfLineFormat : IChoice
     {
         public static readonly EndOfLineFormat LF = new EndOfLineFormat("LF", "\n", 'l');
@@ -179,7 +187,7 @@ namespace txte
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
         public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
-        public Point Offset => this.offset;
+        public Point Offset { get => this.offset; set => this.offset = value; }
         public bool IsModified => this.Rows.Any(x => x.IsModified);
 
         readonly Setting setting;
@@ -187,19 +195,34 @@ namespace txte
         Point valuePosition;
         Point offset;
 
-        public void Find(string query)
+        public FindingStatus Find(string query, FindingStatus finding)
         {
+            if (finding.LastMatch == -1) { finding.Direction = 1; }
+            int current = finding.LastMatch;
             for (int i = 0; i < this.Rows.Count; i++)
             {
-                var index = this.Rows[i].Value.IndexOf(query);
+                current += finding.Direction;
+                if (current == -1)
+                {
+                    current = this.Rows.Count - 1;
+                }
+                else if (current == this.Rows.Count) 
+                {
+                    current = 0;
+                }
+
+                var index = this.Rows[current].Value.IndexOf(query);
                 if (index >= 0)
                 {
+                    finding.LastMatch = current;
                     this.valuePosition.X = index;
-                    this.valuePosition.Y = i;
+                    this.valuePosition.Y = current;
                     this.offset.Y = this.Rows.Count; // to scroll up found word to top of screen
                     break;
                 } 
             }
+
+            return finding;
         }
 
         public void Save()

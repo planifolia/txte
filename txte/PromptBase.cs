@@ -10,9 +10,9 @@ namespace txte
     }
 
     /// For render prompt and process input
-    interface IPrompt<TResult> : IPrompt where TResult: class
+    interface IPrompt<T> : IPrompt
     {
-        (ModalProcessResult, TResult?) ProcessKey(ConsoleKeyInfo keyInfo);
+        IModalProcessResult<T> ProcessKey(ConsoleKeyInfo keyInfo);
     }
 
 }

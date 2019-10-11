@@ -26,4 +26,30 @@ namespace txte
         Cancel,
         Unhandled,
     }
+
+    interface IModalProcessResult<T> { }
+    class ModalNeedsRefreash<T>: IModalProcessResult<T>
+    {
+        public static ModalNeedsRefreash<T> Default = new ModalNeedsRefreash<T>();
+    }
+    class ModalRunning<T>: IModalProcessResult<T>
+    {
+        public static ModalRunning<T> Default = new ModalRunning<T>();
+    }
+    class ModalOk<T>: IModalProcessResult<T>
+    {
+        public ModalOk(T result) => this.Result = result;
+        public readonly T Result;
+
+        public void Deconstruct(out T result) => result = this.Result;
+    }
+    class ModalCancel<T>: IModalProcessResult<T>
+    {
+        public static ModalCancel<T> Default = new ModalCancel<T>();
+    }
+    
+    class ModalUnhandled<T>: IModalProcessResult<T>
+    {
+        public static ModalUnhandled<T> Default = new ModalUnhandled<T>();
+    }
 }

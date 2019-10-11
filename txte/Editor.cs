@@ -318,7 +318,7 @@ namespace txte
             (var clippedFileName, _, _) = 
                 fileName.SubConsoleString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
-            var positionInfo = $"{this.document.Cursor.Y}:{this.document.Cursor.X} {this.document.NewLineFormat.Name}";
+            var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
             screen.AppendRow(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
@@ -338,8 +338,7 @@ namespace txte
             });
         }
         
-        async Task<TResult?> Prompt<TResult>(IPrompt<TResult> prompt, bool needsUpdateEditArea)
-            where TResult: class
+        async Task<IModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
         {
             using var _ = this.prompt.SetTemporary(prompt);
 
@@ -353,11 +352,13 @@ namespace txte
                     continue;
                 }
 
-                (var state, var input) = prompt.ProcessKey(keyInfo);
-                if (state == ModalProcessResult.Ok) { return input; }
-                if (state == ModalProcessResult.Cancel) { return null; }
+                var state = prompt.ProcessKey(keyInfo);
+                if (state is ModalOk<TResult> || state is ModalCancel<TResult>)
+                {
+                    return state;
+                }
 
-                if (needsUpdateEditArea)
+                if (state is ModalNeedsRefreash<TResult>)
                 {
                     this.RefreshScreen(0);
                 }
@@ -430,15 +431,14 @@ namespace txte
         {
             if (!this.document.IsModified) { return ProcessResult.Quit; }
 
-            var confirm = 
-                await Prompt(
+            var promptResult = 
+                await this.Prompt(
                     ChoosePrompt.Create(
                         "File has unsaved changes. Quit without saving?",
                         new[] { Choice.No, Choice.Yes }
-                    ),
-                    false
+                    )
                 );
-            if ((confirm ?? Choice.No) == Choice.Yes)
+            if (promptResult is ModalOk<Choice>(var confirm) && confirm  == Choice.Yes)
             {
                 return ProcessResult.Quit;
             }
@@ -456,16 +456,18 @@ namespace txte
             using var message = new TemporaryMessage("hint: Esc to cancel");
             this.message = message;
 
-            var savePath = await this.Prompt(new InputPrompt("Save as:"), false);
-            if (savePath == null)
+            var promptInput = await this.Prompt(new InputPrompt("Save as:"));
+            if (promptInput is ModalOk<string>(var savePath))
+            {
+                this.document.Path = savePath;
+                await this.SaveWithConfirm();
+                return ProcessResult.Running;
+            }
+            else
             {
                 this.message = new Message("Save is cancelled");
                 return ProcessResult.Running;
             }
-            
-            this.document.Path = savePath;
-            await this.SaveWithConfirm();
-            return ProcessResult.Running;
         }
 
         async Task<ProcessResult> SaveWithConfirm()
@@ -474,15 +476,14 @@ namespace txte
             {
                 if (File.Exists(this.document.Path))
                 {
-                    var confirm = 
-                        await Prompt(
+                    var promptResult = 
+                        await this.Prompt(
                             ChoosePrompt.Create(
                                 "Override?",
                                 new[] { Choice.No, Choice.Yes }
-                            ),
-                            false
+                            )
                         );
-                    if ((confirm ?? Choice.No) == Choice.No)
+                    if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.No)
                     {
                         this.message = new Message("Save is cancelled");
                         return ProcessResult.Running;
@@ -495,38 +496,42 @@ namespace txte
             {
                 this.message = new Message(ex.Message);
             }
+
             return ProcessResult.Running;
         }
 
         async Task<ProcessResult> Find()
         {
-            using var message = new TemporaryMessage("hint: Esc to cancel");
+            using var message = new TemporaryMessage("hint: Esc to cancel, (Shift) Tab to explor");
             this.message = message;
             var savedPosition = this.document.ValuePosition;
-            var query = await this.Prompt(new InputPrompt("Search:", (x, _) => this.document.Find(x)), true);
-            if (query != null)
+            var savedOffset = this.document.Offset;
+            var finding = new FindingStatus { LastMatch = -1, Direction = 1 };
+            var promptResult = await this.Prompt(new FindPrompt("Search:", this.document.Find));
+            if (promptResult is ModalOk<(string pattern, FindingStatus status)>(var query))
             {
-                this.document.Find(query);
+                this.document.Find(query.pattern, query.status);
             }
             else
             {
                 this.document.ValuePosition = savedPosition;
+                this.document.Offset = savedOffset;
             }
+
             return ProcessResult.Running;
         }
 
         async Task<ProcessResult> ChangeEndOfLine()
         {
-            var selection = 
-                await Prompt(
+            var promptResult = 
+                await this.Prompt(
                     ChoosePrompt.Create(
                         "Change End of Line sequence:",
                         EndOfLineFormat.All,
                         this.document.NewLineFormat
-                    ),
-                    false
+                    )
                 );
-            if (selection != null)
+            if (promptResult is ModalOk<EndOfLineFormat>(var selection))
             {
                 this.document.NewLineFormat = selection;
             }
@@ -538,16 +543,15 @@ namespace txte
         {
             using var message = new TemporaryMessage("hint: Set according to your terminal font. Usually Half-Width");
             this.message = message;
-            var selection = 
-                await Prompt(
+            var modalResult = 
+                await this.Prompt(
                     ChoosePrompt.Create(
                         "Change East Asian Width - Ambiguous:",
                         EAWAmbiguousFormat.All,
                         EAWAmbiguousFormat.FromSetting(this.setting.IsFullWidthAmbiguous)
-                    ),
-                    false
+                    )
                 );
-            if (selection != null)
+            if (modalResult is ModalOk<EAWAmbiguousFormat>(var selection))
             {
                 this.setting.IsFullWidthAmbiguous = selection.IsFullWidthAmbiguous;
                 this.message = new Message($"East Asian Width - Ambiguous = {selection}");
