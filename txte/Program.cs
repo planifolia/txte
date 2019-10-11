@@ -5,6 +5,7 @@ using txte.Settings;
 using txte.ConsoleInterface;
 using txte.TextDocument;
 using txte.TextEditor;
+using txte.Text;
 
 namespace txte
 {
@@ -25,7 +26,13 @@ namespace txte
                 var document =
                     (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
                     : new Document(setting);
-                var editor = new Editor(console, setting, document, new Message("hint: Esc key to show menu"));
+                var startingMessage = 
+                    new Message(ColoredString.Concat(setting,
+                        ("hint: ", ColorSet.OutOfBounds),
+                        ("Esc", ColorSet.KeyExpression),
+                        (" to show menu", ColorSet.OutOfBounds)
+                    ));
+                var editor = new Editor(console, setting, document, startingMessage);
                 await editor.RunAsync();
                 return 0;
             }

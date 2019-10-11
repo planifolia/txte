@@ -191,12 +191,12 @@ namespace txte.TextEditor
         {
             var render = this.document.Rows[docRow].Render;
             var sublenderLength =
-                (render.GetConsoleLength(ambiguousSetting) - this.document.Offset.X)
+                (render.GetRenderLength(ambiguousSetting) - this.document.Offset.X)
                 .Clamp(0, this.console.Width);
             if (sublenderLength > 0)
             {
                 var (subrender, startIsFragmented, endIsFragmented) =
-                    render.SubConsoleString(this.document.Offset.X, sublenderLength, ambiguousSetting);
+                    render.SubRenderString(this.document.Offset.X, sublenderLength, ambiguousSetting);
 
                 var spans = new List<StyledString>();
                 if (startIsFragmented) { spans.Add(new StyledString("]", ColorSet.Fragment)); }
@@ -236,23 +236,6 @@ namespace txte.TextEditor
                     new StyledString(message, ColorSet.OutOfBounds),
                 });
             }
-            // else if (y == 1)
-            // {
-            //     var message1 = "hint: You can omit ";
-            //     var key = "Crtl";
-            //     var message2 = " on the menu screen.";
-            //     var messageLength = message1.Length + key.Length + message2.Length;
-            //     var leftPadding = (this.console.Width - messageLength) / 2 - 1;
-            //     screen.AppendRow(new[]
-            //     { 
-            //         new StyledString("~", ColorSet.OutOfBounds),
-            //         new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
-            //         new StyledString(message1, ColorSet.OutOfBounds),
-            //         new StyledString(key, ColorSet.KeyExpression),
-            //         new StyledString(message2, ColorSet.OutOfBounds),
-            //         // new StyledString(new string(' ', this.console.Width - message1.Length - key.Length - message2.Length), ColorSet.SystemMessage),
-            //     });
-            // }
             else if (y == 1)
             {
                 screen.AppendRow(new[]
@@ -323,7 +306,7 @@ namespace txte.TextEditor
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
             var fileNameLength = fileName.Length.AtMax(20);
             (var clippedFileName, _, _) = 
-                fileName.SubConsoleString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
+                fileName.SubRenderString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
@@ -335,14 +318,17 @@ namespace txte.TextEditor
             if (!this.message.IsValid) { return; }
 
             var text = this.message.Value;
-            var textLength = text.Length.AtMax(this.console.Width);
-            (var render, _, _) = text.SubConsoleString(0, textLength, this.setting.IsFullWidthAmbiguous);
-            screen.AppendRow(new[]
-            {
-                new StyledString("~", ColorSet.OutOfBounds),
-                new StyledString(new string(' ', this.console.Width - render.GetConsoleLength(this.setting.IsFullWidthAmbiguous) - 1)),
-                new StyledString(render, ColorSet.OutOfBounds),
-            });
+            var textLength = text.GetRenderLength();
+            var displayLength = textLength.AtMax(this.console.Width);
+            var render = text.SubRenderString(textLength - displayLength, displayLength);
+            var prefix = 
+                (displayLength < this.console.Width) ? new[]
+                {
+                    new StyledString("~", ColorSet.OutOfBounds),
+                    new StyledString(new string(' ', this.console.Width - displayLength - 1)),
+                }
+                : Enumerable.Empty<StyledString>();
+            screen.AppendRow(prefix.Concat(render.ToStyledString()));
         }
         
         async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
@@ -381,7 +367,12 @@ namespace txte.TextEditor
         {
             using var _ = this.menu.ShowWhileModal();
 
-            using var message = new TemporaryMessage("hint: You can omit Crtl on the menu screen");
+            using var message = 
+                new TemporaryMessage(ColoredString.Concat(setting,
+                    ("hint: You can omit ", ColorSet.OutOfBounds),
+                    ("Crtl", ColorSet.KeyExpression),
+                    (" on the menu screen", ColorSet.OutOfBounds)
+                ));
             this.message = message;
 
             this.RefreshScreen(0);
@@ -460,7 +451,12 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> SaveAs()
         {
-            using var message = new TemporaryMessage("hint: Esc to cancel");
+            using var message =
+                new TemporaryMessage(ColoredString.Concat(setting,
+                    ("hint: ", ColorSet.OutOfBounds),
+                    ("Esc", ColorSet.KeyExpression),
+                    (" to cancel", ColorSet.OutOfBounds)
+                ));
             this.message = message;
 
             var promptInput = await this.Prompt(new InputPrompt("Save as:"));
@@ -472,7 +468,9 @@ namespace txte.TextEditor
             }
             else
             {
-                this.message = new Message("Save is cancelled");
+                this.message =
+                    new Message(ColoredString.Concat(setting,
+                        ("Save is cancelled", ColorSet.OutOfBounds)));
                 return ProcessResult.Running;
             }
         }
@@ -492,16 +490,22 @@ namespace txte.TextEditor
                         );
                     if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.No)
                     {
-                        this.message = new Message("Save is cancelled");
+                        this.message =
+                            new Message(ColoredString.Concat(setting,
+                                ("Save is cancelled", ColorSet.OutOfBounds)));
                         return ProcessResult.Running;
                     }
                 }
                 this.document.Save();
-                this.message = new Message("File is saved");
+                this.message =
+                    new Message(ColoredString.Concat(setting,
+                        ("File is saved", ColorSet.OutOfBounds)));
             }
             catch (IOException ex)
             {
-                this.message = new Message(ex.Message);
+                this.message =
+                    new Message(ColoredString.Concat(setting,
+                        (ex.Message, ColorSet.Default)));
             }
 
             return ProcessResult.Running;
@@ -509,7 +513,16 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> Find()
         {
-            using var message = new TemporaryMessage("hint: Esc to cancel, (Shift +) Tab to explor");
+            using var message =
+                new TemporaryMessage(ColoredString.Concat(setting,
+                    ("hint: You can omit ", ColorSet.OutOfBounds),
+                    ("Esc", ColorSet.KeyExpression),
+                    (" to cancel, (", ColorSet.OutOfBounds),
+                    ("Shift", ColorSet.KeyExpression),
+                    (" +) ", ColorSet.OutOfBounds),
+                    ("Tab", ColorSet.KeyExpression),
+                    (" to explor", ColorSet.OutOfBounds)
+                ));
             this.message = message;
             var savedPosition = this.document.ValuePosition;
             var savedOffset = this.document.Offset;
@@ -548,7 +561,9 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> SwitchAmbiguousWidth()
         {
-            using var message = new TemporaryMessage("hint: Set according to your terminal font. Usually Half-Width");
+            using var message =
+                    new TemporaryMessage(ColoredString.Concat(setting,
+                        ("hint: Set according to your terminal font. Usually Half-Width", ColorSet.OutOfBounds)));
             this.message = message;
             var modalResult = 
                 await this.Prompt(
@@ -561,7 +576,9 @@ namespace txte.TextEditor
             if (modalResult is ModalOk<EAWAmbiguousFormat>(var selection))
             {
                 this.setting.IsFullWidthAmbiguous = selection.IsFullWidthAmbiguous;
-                this.message = new Message($"East Asian Width - Ambiguous = {selection}");
+                this.message =
+                    new Message(ColoredString.Concat(setting,
+                        ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
             }
 
             return ProcessResult.Running;

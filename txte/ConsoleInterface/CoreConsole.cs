@@ -128,7 +128,7 @@ namespace txte.ConsoleInterface
             {
                 int written = 0;
                 Console.Write(value);
-                written += value.GetConsoleLength(this.ambuguosIsfullWidth);
+                written += value.GetRenderLength(this.ambuguosIsfullWidth);
                 var padding = this.size.Width - written;
                 if (padding > 0)
                 {
@@ -147,7 +147,7 @@ namespace txte.ConsoleInterface
                 foreach (var span in spans)
                 {
                     this.AppendStyledString(span);
-                    written += span.Value.GetConsoleLength(this.ambuguosIsfullWidth);
+                    written += span.Value.GetRenderLength(this.ambuguosIsfullWidth);
                 }
                 var padding = this.size.Width - written;
                 if (padding > 0)

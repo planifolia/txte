@@ -2,27 +2,12 @@
 {
     static class ConsoleStringExtensions
     {
-        public static int GetConsoleLength(this string value, bool ambiguousIsFullWidth)
+        public static int GetRenderLength(this string value, bool ambiguousIsFullWidth)
         {
             int length = 0;
             foreach (var c in value)
             {
-                switch (c.GetEastAsianWidthType())
-                {
-                    case EastAsianWidthTypes.A:
-                        length += ambiguousIsFullWidth ? 2 : 1;
-                        break;
-                    case EastAsianWidthTypes.F:
-                    case EastAsianWidthTypes.W:
-                        length += 2;
-                        break;
-                    case EastAsianWidthTypes.N:
-                    case EastAsianWidthTypes.H:
-                    case EastAsianWidthTypes.Na:
-                    default:
-                        length += 1;
-                        break;
-                }
+                length += GetEastAsianWidth(c, ambiguousIsFullWidth);
             }
             return length;
         }
@@ -45,7 +30,7 @@
             }
         }
 
-        public static (string value, bool hasFragmentedStart, bool hasFragmentedEnd) SubConsoleString(
+        public static (string value, bool hasFragmentedStart, bool hasFragmentedEnd) SubRenderString(
             this string value, int start, int length, bool ambiguousIsFullWidth)
         {
             int consolePos = 0;

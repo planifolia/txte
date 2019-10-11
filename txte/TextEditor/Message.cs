@@ -1,4 +1,5 @@
 using System;
+using txte.Text;
 
 namespace txte.TextEditor
 {
@@ -6,14 +7,14 @@ namespace txte.TextEditor
     {
         static readonly TimeSpan expiration = TimeSpan.FromSeconds(5);
 
-        public Message(string value, DateTime? createdTime = null)
+        public Message(ColoredString value, DateTime? createdTime = null)
         {
             this.Value = value;
             this.IsValid = true;
             this.createdTime = createdTime ?? DateTime.Now;
         }
 
-        public string Value { get; }
+        public ColoredString Value { get; }
         public bool IsValid { get; private set; }
         readonly DateTime createdTime;
 
@@ -33,7 +34,7 @@ namespace txte.TextEditor
 
     class TemporaryMessage : Message, IDisposable
     {
-        public TemporaryMessage(string value, DateTime? createdTime = null) : base(value, createdTime) { }
+        public TemporaryMessage(ColoredString value, DateTime? createdTime = null) : base(value, createdTime) { }
 
         #region IDisposable Support
         private bool disposedValue = false;
