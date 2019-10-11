@@ -18,27 +18,27 @@ namespace txte
 
         public string Current => this.input.ToString();
 
-        public IModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
+        public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
                 case { Key: ConsoleKey.Backspace, Modifiers: (ConsoleModifiers)0 }:
                     this.input.Length = (input.Length - 1).AtMin(0);
-                    return ModalRunning<string>.Default;
+                    return ModalRunning.Default;
 
                 case { Key: ConsoleKey.Escape, Modifiers: (ConsoleModifiers)0 }:
-                    return ModalCancel<string>.Default;
+                    return ModalCancel.Default;
 
                 case { Key: ConsoleKey.Enter, Modifiers: (ConsoleModifiers)0 }:
-                    return new ModalOk<string>(this.input.ToString());
+                    return ModalOk.Create(this.input.ToString());
 
                 default:
                     if (!char.IsControl(keyInfo.KeyChar))
                     { 
                         this.input.Append(keyInfo.KeyChar);
-                    return ModalRunning<string>.Default;
+                    return ModalRunning.Default;
                     }
-                    return ModalUnhandled<string>.Default;
+                    return ModalUnhandled.Default;
             }
         }
 
@@ -68,7 +68,7 @@ namespace txte
         FindingStatus findedStatus;
         FindingStatus findingStatus;
 
-        public IModalProcessResult<(string pattern, FindingStatus findStatus)> ProcessKey(ConsoleKeyInfo keyInfo)
+        public ModalProcessResult<(string pattern, FindingStatus findStatus)> ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
@@ -77,39 +77,38 @@ namespace txte
                     this.findingStatus.Direction = 1;
                     this.findedStatus = this.findingStatus;
                     this.findingStatus = this.callback(this.prompt.Current, this.findedStatus);
-                    return ModalNeedsRefreash<(string pattern, FindingStatus findStatus)>.Default;
+                    return ModalNeedsRefreash.Default;
 
                 // Search Backward
                 case { Key: ConsoleKey.Tab, Modifiers: ConsoleModifiers.Shift }:
                     this.findingStatus.Direction = -1;
                     this.findedStatus = this.findingStatus;
                     this.findingStatus = this.callback(this.prompt.Current, this.findedStatus);
-                    return ModalNeedsRefreash<(string pattern, FindingStatus findStatus)>.Default;
+                    return ModalNeedsRefreash.Default;
 
                 default:
                     break;
             }
+
             var baseResult = this.prompt.ProcessKey(keyInfo);
+
             if (baseResult is ModalOk<string> result)
             {
-                return 
-                    new ModalOk<(string pattern, FindingStatus findStatus)>(
-                        (result.Result, this.findedStatus)
-                    );
+                return ModalOk.Create((result.Result, this.findedStatus));
             }
-            else if (baseResult is ModalRunning<string>)
+            else if (baseResult is IModalRunning)
             {
                 this.findedStatus = new FindingStatus{ Direction = 1, LastMatch = -1 };
                 this.findingStatus = this.callback(this.prompt.Current, this.findedStatus);
-                return ModalNeedsRefreash<(string pattern, FindingStatus findStatus)>.Default;
+                return ModalNeedsRefreash.Default;
             }
-            else if (baseResult is ModalCancel<string>)
+            else if (baseResult is IModalCancel)
             {
-                return ModalCancel<(string pattern, FindingStatus findStatus)>.Default;
+                return ModalCancel.Default;
             }
             else
             {
-                return ModalUnhandled<(string pattern, FindingStatus findStatus)>.Default;
+                return ModalUnhandled.Default;
             }
         }
         

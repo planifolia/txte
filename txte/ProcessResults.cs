@@ -18,38 +18,67 @@ namespace txte
             new ValueTask<ProcessResult>(ProcessResult.Unhandled).AsTask();
     }
 
-    enum ModalProcessResult
-    {
-        NeedsRefreash,
-        Running,
-        Ok,
-        Cancel,
-        Unhandled,
+    abstract class ModalProcessResult<T> { 
+        public static implicit operator ModalProcessResult<T> (ModalNeedsRefreash untyped)
+            => ModalNeedsRefreash<T>.Default;
+        public static implicit operator ModalProcessResult<T> (ModalRunning untyped)
+            => ModalRunning<T>.Default;
+        public static implicit operator ModalProcessResult<T> (ModalCancel untyped)
+            => ModalCancel<T>.Default;
+        public static implicit operator ModalProcessResult<T> (ModalUnhandled untyped)
+            => ModalUnhandled<T>.Default;
     }
 
-    interface IModalProcessResult<T> { }
-    class ModalNeedsRefreash<T>: IModalProcessResult<T>
-    {
-        public static ModalNeedsRefreash<T> Default = new ModalNeedsRefreash<T>();
-    }
-    class ModalRunning<T>: IModalProcessResult<T>
-    {
-        public static ModalRunning<T> Default = new ModalRunning<T>();
-    }
-    class ModalOk<T>: IModalProcessResult<T>
+    interface IModalOk { }
+    class ModalOk<T>: ModalProcessResult<T>, IModalOk
     {
         public ModalOk(T result) => this.Result = result;
         public readonly T Result;
 
         public void Deconstruct(out T result) => result = this.Result;
     }
-    class ModalCancel<T>: IModalProcessResult<T>
+    static class ModalOk
+    {
+        public static ModalOk<T> Create<T>(T result) => new ModalOk<T>(result);
+    }
+
+    interface IModalNeedsRefreash { }
+    class ModalNeedsRefreash<T>: ModalProcessResult<T>, IModalNeedsRefreash
+    {
+        public static ModalNeedsRefreash<T> Default = new ModalNeedsRefreash<T>();
+    }
+    class ModalNeedsRefreash
+    {
+        public static ModalNeedsRefreash Default = new ModalNeedsRefreash();
+    }
+
+    interface IModalRunning { }
+    class ModalRunning<T>: ModalProcessResult<T>, IModalRunning
+    {
+        public static ModalRunning<T> Default = new ModalRunning<T>();
+    }
+    class ModalRunning
+    {
+        public static ModalRunning Default = new ModalRunning();
+    }
+
+    interface IModalCancel { }
+    class ModalCancel<T>: ModalProcessResult<T>, IModalCancel
     {
         public static ModalCancel<T> Default = new ModalCancel<T>();
     }
+    class ModalCancel
+    {
+        public static ModalCancel Default = new ModalCancel();
+    }
     
-    class ModalUnhandled<T>: IModalProcessResult<T>
+    interface IModalUnhandled { }
+    class ModalUnhandled<T>: ModalProcessResult<T>, IModalUnhandled
     {
         public static ModalUnhandled<T> Default = new ModalUnhandled<T>();
+    }
+    class ModalUnhandled
+    {
+        public static ModalUnhandled Default = new ModalUnhandled();
     }
 }

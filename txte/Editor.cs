@@ -338,7 +338,7 @@ namespace txte
             });
         }
         
-        async Task<IModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
+        async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
         {
             using var _ = this.prompt.SetTemporary(prompt);
 
@@ -353,12 +353,12 @@ namespace txte
                 }
 
                 var state = prompt.ProcessKey(keyInfo);
-                if (state is ModalOk<TResult> || state is ModalCancel<TResult>)
+                if (state is IModalOk || state is IModalCancel)
                 {
                     return state;
                 }
 
-                if (state is ModalNeedsRefreash<TResult>)
+                if (state is IModalNeedsRefreash)
                 {
                     this.RefreshScreen(0);
                 }
@@ -502,7 +502,7 @@ namespace txte
 
         async Task<ProcessResult> Find()
         {
-            using var message = new TemporaryMessage("hint: Esc to cancel, (Shift) Tab to explor");
+            using var message = new TemporaryMessage("hint: Esc to cancel, (Shift +) Tab to explor");
             this.message = message;
             var savedPosition = this.document.ValuePosition;
             var savedOffset = this.document.Offset;

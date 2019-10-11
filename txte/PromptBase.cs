@@ -12,7 +12,7 @@ namespace txte
     /// For render prompt and process input
     interface IPrompt<T> : IPrompt
     {
-        IModalProcessResult<T> ProcessKey(ConsoleKeyInfo keyInfo);
+        ModalProcessResult<T> ProcessKey(ConsoleKeyInfo keyInfo);
     }
 
 }
