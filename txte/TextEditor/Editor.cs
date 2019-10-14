@@ -12,6 +12,7 @@ using txte.Text;
 using txte.ConsoleInterface;
 using txte.TextDocument;
 using txte.Prompts;
+using System.Collections.Immutable;
 
 namespace txte.TextEditor
 {
@@ -26,8 +27,8 @@ namespace txte.TextEditor
             this.setting = setting;
             this.document = document;
             this.message = firstMessage;
-            this.menu = new Menu(SetupShortcuts());
-            this.editKeyBinds = SetupEditKeyBinds();
+            this.menu = new Menu(this.SetupShortcuts());
+            this.editKeyBinds = this.SetupEditKeyBinds();
         }
 
         readonly IConsole console;
@@ -66,6 +67,10 @@ namespace txte.TextEditor
                     default:
                         break;
                 }
+                if (Console.KeyAvailable)
+                {
+                    continue; //skip if muitiple chars are imput by IME, etc.
+                }
                 this.RefreshScreen(0);
             }
         }
@@ -96,14 +101,22 @@ namespace txte.TextEditor
                     () => this.DelegateTask(this.document.MoveHome),
                 [new KeyBind(new KeyCombination(ConsoleKey.End, false, false), "Move to End of Line")] =
                     () => this.DelegateTask(this.document.MoveEnd),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.Home, true, false), "Move to Start of File")] =
                     () => this.DelegateTask(this.document.MoveStartOfFile),
                 [new KeyBind(new KeyCombination(ConsoleKey.End, true, false), "Move to End of File")] =
                     () => this.DelegateTask(this.document.MoveEndOfFile),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.PageUp, false, false), "Scroll to Previous Page")] =
                     () => this.DelegateTask(() => this.document.MovePageUp(this.editArea.Height)),
                 [new KeyBind(new KeyCombination(ConsoleKey.PageDown, false, false), "Scroll to Next Page")] =
                     () => this.DelegateTask(() => this.document.MovePageDown(this.editArea.Height)),
+
+                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, true), "Move Cursor Up Quarter Page")] =
+                    () => this.DelegateTask(() => this.document.MoveUp(this.editArea.Height / 4)),
+                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, true), "Move Cursor Down Quarter Page")] =
+                    () => this.DelegateTask(() => this.document.MoveDown(this.editArea.Height / 4)),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, false), "Move Cursor Up")] =
                     () => this.DelegateTask(this.document.MoveUp),
                 [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, false), "Move Cursor Down")] =
@@ -112,8 +125,10 @@ namespace txte.TextEditor
                     () => this.DelegateTask(this.document.MoveLeft),
                 [new KeyBind(new KeyCombination(ConsoleKey.RightArrow, false, false), "Move Cursor Right")] =
                     () => this.DelegateTask(this.document.MoveRight),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.Enter, false, false), "Break Line")] =
                     () => this.DelegateTask(this.document.InsertNewLine),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.Backspace, false, false), "Delete a Left Letter")] =
                     () => this.DelegateTask(this.document.BackSpace),
                 [new KeyBind(new KeyCombination(ConsoleKey.Delete, false, false), "Delete a Right Letter")] =
@@ -189,26 +204,7 @@ namespace txte.TextEditor
 
         void DrawDocumentRow(IScreen screen, bool ambiguousSetting, int docRow)
         {
-            var render = this.document.Rows[docRow].Render;
-            var sublenderLength =
-                (render.GetRenderLength(ambiguousSetting) - this.document.Offset.X)
-                .Clamp(0, this.console.Width);
-            if (sublenderLength > 0)
-            {
-                var (subrender, startIsFragmented, endIsFragmented) =
-                    render.SubRenderString(this.document.Offset.X, sublenderLength, ambiguousSetting);
-
-                var spans = new List<StyledString>();
-                if (startIsFragmented) { spans.Add(new StyledString("]", ColorSet.Fragment)); }
-                spans.Add(new StyledString(subrender));
-                if (endIsFragmented) { spans.Add(new StyledString("[", ColorSet.Fragment)); }
-
-                screen.AppendRow(spans);
-            }
-            else
-            {
-                screen.AppendRow("");
-            }
+            this.document.DrawRow(screen, docRow);
         }
         
         void DrawMenu(IScreen screen, int y)
@@ -328,7 +324,7 @@ namespace txte.TextEditor
                     new StyledString(new string(' ', this.console.Width - displayLength - 1)),
                 }
                 : Enumerable.Empty<StyledString>();
-            screen.AppendRow(prefix.Concat(render.ToStyledString()));
+            screen.AppendRow(prefix.Concat(render.ToStyledStrings()));
         }
         
         async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
@@ -357,7 +353,7 @@ namespace txte.TextEditor
                 }
                 else
                 {
-                    this.RefreshScreen(editArea.Height);
+                    this.RefreshScreen(this.editArea.Height);
                 }
             }
         }
@@ -368,7 +364,7 @@ namespace txte.TextEditor
             using var _ = this.menu.ShowWhileModal();
 
             using var message = 
-                new TemporaryMessage(ColoredString.Concat(setting,
+                new TemporaryMessage(ColoredString.Concat(this.setting,
                     ("hint: You can omit ", ColorSet.OutOfBounds),
                     ("Crtl", ColorSet.KeyExpression),
                     (" on the menu screen", ColorSet.OutOfBounds)
@@ -452,7 +448,7 @@ namespace txte.TextEditor
         async Task<ProcessResult> SaveAs()
         {
             using var message =
-                new TemporaryMessage(ColoredString.Concat(setting,
+                new TemporaryMessage(ColoredString.Concat(this.setting,
                     ("hint: ", ColorSet.OutOfBounds),
                     ("Esc", ColorSet.KeyExpression),
                     (" to cancel", ColorSet.OutOfBounds)
@@ -469,7 +465,7 @@ namespace txte.TextEditor
             else
             {
                 this.message =
-                    new Message(ColoredString.Concat(setting,
+                    new Message(ColoredString.Concat(this.setting,
                         ("Save is cancelled", ColorSet.OutOfBounds)));
                 return ProcessResult.Running;
             }
@@ -491,20 +487,20 @@ namespace txte.TextEditor
                     if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.No)
                     {
                         this.message =
-                            new Message(ColoredString.Concat(setting,
+                            new Message(ColoredString.Concat(this.setting,
                                 ("Save is cancelled", ColorSet.OutOfBounds)));
                         return ProcessResult.Running;
                     }
                 }
                 this.document.Save();
                 this.message =
-                    new Message(ColoredString.Concat(setting,
+                    new Message(ColoredString.Concat(this.setting,
                         ("File is saved", ColorSet.OutOfBounds)));
             }
             catch (IOException ex)
             {
                 this.message =
-                    new Message(ColoredString.Concat(setting,
+                    new Message(ColoredString.Concat(this.setting,
                         (ex.Message, ColorSet.Default)));
             }
 
@@ -514,7 +510,7 @@ namespace txte.TextEditor
         async Task<ProcessResult> Find()
         {
             using var message =
-                new TemporaryMessage(ColoredString.Concat(setting,
+                new TemporaryMessage(ColoredString.Concat(this.setting,
                     ("hint: You can omit ", ColorSet.OutOfBounds),
                     ("Esc", ColorSet.KeyExpression),
                     (" to cancel, (", ColorSet.OutOfBounds),
@@ -524,16 +520,21 @@ namespace txte.TextEditor
                     (" to explor", ColorSet.OutOfBounds)
                 ));
             this.message = message;
+
             var savedPosition = this.document.ValuePosition;
             var savedOffset = this.document.Offset;
-            var finding = new FindingStatus { LastMatch = -1, Direction = 1 };
-            var promptResult = await this.Prompt(new FindPrompt("Search:", this.document.Find));
+
+            var finder = new FindPrompt("Search:", this.document);
+            using var _ = this.document.Finding.SetTemporary(finder);
+
+            var promptResult = await this.Prompt(finder);
             if (promptResult is ModalOk<(string pattern, FindingStatus status)>(var query))
             {
-                this.document.Find(query.pattern, query.status);
+                // remain cursor position
             }
             else
             {
+                // restore cursor position
                 this.document.ValuePosition = savedPosition;
                 this.document.Offset = savedOffset;
             }
@@ -562,7 +563,7 @@ namespace txte.TextEditor
         async Task<ProcessResult> SwitchAmbiguousWidth()
         {
             using var message =
-                    new TemporaryMessage(ColoredString.Concat(setting,
+                    new TemporaryMessage(ColoredString.Concat(this.setting,
                         ("hint: Set according to your terminal font. Usually Half-Width", ColorSet.OutOfBounds)));
             this.message = message;
             var modalResult = 
@@ -577,7 +578,7 @@ namespace txte.TextEditor
             {
                 this.setting.IsFullWidthAmbiguous = selection.IsFullWidthAmbiguous;
                 this.message =
-                    new Message(ColoredString.Concat(setting,
+                    new Message(ColoredString.Concat(this.setting,
                         ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
             }
 

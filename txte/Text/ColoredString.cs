@@ -22,6 +22,20 @@ namespace txte.Text
             return new ColoredString(setting, body.ToString(), false, colors.ToImmutableSortedSet(), false);
         }
 
+        public ColoredString(Setting setting, string body)
+            : this (
+                setting,
+                body,
+                false,
+                (body.Length == 0)
+                    ? ImmutableSortedSet<ColorSpan>.Empty
+                    : new SortedSet<ColorSpan>
+                    {
+                        new ColorSpan(ColorSet.Default, new Range(0, body.Length))
+                    }.ToImmutableSortedSet(),
+                false)
+        { }
+
         public ColoredString(
             Setting setting, string body,
             bool hasFlagmentedHead, ImmutableSortedSet<ColorSpan> colors, bool hasFlagmentedTail
@@ -35,11 +49,150 @@ namespace txte.Text
         readonly ImmutableSortedSet<ColorSpan> colors;
         readonly bool hasFragmentedTail;
 
+        public ColoredString Overlay(ImmutableSortedSet<ColorSpan> ovarlay)
+        {
+            if (this.colors.Count == 0) { return this; }
 
-        public IEnumerable<StyledString> ToStyledString()
+            var valueBegin = this.colors[0].ValueRange.Begin;
+            var valueEnd = this.colors[^1].ValueRange.End;
+
+            var clipedOverlay = new SortedSet<ColorSpan>();
+            using (var colorSource = ovarlay.GetEnumerator())
+            {
+                // add head span
+                while(true)
+                {
+                    if (!colorSource.MoveNext()) { break; }
+                    var head = colorSource.Current;
+                    if (valueBegin < head.ValueRange.End)
+                    {
+                        clipedOverlay.Add(new ColorSpan(head.Color,
+                            new Range(head.ValueRange.Begin.AtMin(valueBegin), head.ValueRange.End)));
+                        break;
+                    }
+                    
+                }
+                // add body span
+                while(true)
+                {
+                    if (!colorSource.MoveNext()) { break; }
+                    var body = colorSource.Current;
+                    if (body.ValueRange.End < valueEnd)
+                    {
+                        clipedOverlay.Add(new ColorSpan(body.Color,
+                            new Range(body.ValueRange.Begin.AtMin(valueBegin), body.ValueRange.End)));
+                    }
+                    else if (valueEnd < body.ValueRange.Begin)
+                    {
+                        clipedOverlay.Add(new ColorSpan(body.Color,
+                            new Range(body.ValueRange.Begin, body.ValueRange.End.AtMax(valueEnd))));
+                    }
+                    else
+                    {
+                        break; // out of range
+                    }
+                }
+            }
+            var mergedColor = new SortedSet<ColorSpan>();
+            var originalColors = new Stack<ColorSpan>(this.colors.Reverse());
+            if (originalColors.Count == 0) { return this; }
+            foreach (var overColor in clipedOverlay)
+            {
+                while(true)
+                {
+                    
+                    if (!originalColors.TryPop(out var before)) { break; }
+                    if (before.ValueRange.End <= overColor.ValueRange.Begin)
+                    {
+                        // [--base--)
+                        //          [--over--)
+                        mergedColor.Add(before);
+                    }
+                    else
+                    {
+                        // [--base----...       || [--base--...
+                        //           [--over--) || [--over------)
+                        if (before.ValueRange.Begin < overColor.ValueRange.Begin)
+                        {
+                            mergedColor.Add(
+                                new ColorSpan(
+                                    before.Color,
+                                    new Range(
+                                        before.ValueRange.Begin,
+                                        before.ValueRange.End.AtMax(overColor.ValueRange.Begin)
+                                    )
+                                )
+                            );
+                        }
+                        if (overColor.ValueRange.End < before.ValueRange.End)
+                        {
+                            originalColors.Push(
+                                new ColorSpan(
+                                    before.Color,
+                                    new Range(
+                                        before.ValueRange.Begin.AtMin(overColor.ValueRange.End),
+                                        before.ValueRange.End
+                                    )
+                                )
+                            );
+                        }
+                        break;
+                    }
+                }
+                while(true)
+                {
+                    if (!originalColors.TryPop(out var overlapped)) { break; }
+                    if (overColor.ValueRange.End <= overlapped.ValueRange.Begin)
+                    {
+                        mergedColor.Add(overColor);
+                        originalColors.Push(overlapped);
+                        break; // move to next
+                    }
+
+                    if (overlapped.ValueRange.Begin < overColor.ValueRange.Begin)
+                    {
+                        mergedColor.Add(
+                            new ColorSpan(
+                                overlapped.Color, 
+                                new Range(
+                                    overlapped.ValueRange.Begin,
+                                    overlapped.ValueRange.End.AtMax(overColor.ValueRange.Begin)
+                                )
+                            )
+                        );
+                    }
+                    else if (overlapped.ValueRange.End <= overColor.ValueRange.End)
+                    {
+                        // overrided all
+                    }
+                    else
+                    {
+                        originalColors.Push(
+                            new ColorSpan(
+                                overlapped.Color, 
+                                new Range(
+                                    overlapped.ValueRange.Begin.AtMin(overColor.ValueRange.End),
+                                    overlapped.ValueRange.End
+                                )
+                            )
+                        );
+                    }
+                }
+            }
+            // rest
+            foreach (var color in originalColors)
+            {
+                mergedColor.Add(color);
+            }
+            return new ColoredString(
+                this.setting, this.body, 
+                this.hasFragmentedHead, mergedColor.ToImmutableSortedSet(), this.hasFragmentedTail);
+        }
+
+        public IEnumerable<StyledString> ToStyledStrings()
         {
             if (this.hasFragmentedHead) { yield return StyledString.LeftFragment; }
-            foreach (var color in colors)
+            foreach (var color in this.colors)
             {
                 yield return new StyledString(
                     this.body.Substring(color.ValueRange.Begin, color.ValueRange.End - color.ValueRange.Begin),
@@ -51,7 +204,6 @@ namespace txte.Text
 
         public ColoredString SubRenderString(int renderStart, int renderLength)
         {
-            var subColors = new SortedSet<ColorSpan>();
             using var colorSource = this.colors.GetEnumerator();
             bool ambiguousIsFullWidth = this.setting.IsFullWidthAmbiguous;
             int renderPos = 0;
@@ -103,11 +255,12 @@ namespace txte.Text
             var endIsFragmented = renderStart + renderLength < renderPos;
             var valueEnd = valuePos - (endIsFragmented ? 1 : 0);
 
+            var subColors = new SortedSet<ColorSpan>();
             // add first span
             if (colorSource.Current.ValueRange.End < valueEnd)
             {
                 var first = colorSource.Current;
-                colors.Add(new ColorSpan(first.Color,
+                subColors.Add(new ColorSpan(first.Color,
                     new Range(first.ValueRange.Begin.AtMin(valueStart), first.ValueRange.End)));
                 
                 if (!colorSource.MoveNext())
@@ -120,10 +273,10 @@ namespace txte.Text
                 }
             }
             // add middle span
-            if (colorSource.Current.ValueRange.End < valueEnd - 1)
+            while (colorSource.Current.ValueRange.End < valueEnd - 1)
             {
                 var middle = colorSource.Current;
-                colors.Add(new ColorSpan(middle.Color, middle.ValueRange));
+                subColors.Add(new ColorSpan(middle.Color, middle.ValueRange));
                 
                 if (!colorSource.MoveNext())
                 {
@@ -136,17 +289,19 @@ namespace txte.Text
             }
             // add last span
             var last = colorSource.Current;
-            colors.Add(new ColorSpan(last.Color,
+            subColors.Add(new ColorSpan(last.Color,
                 new Range(last.ValueRange.Begin, last.ValueRange.End.AtMax(valueEnd))));
 
             return new ColoredString(
                 this.setting, this.body,
-                startIsFragmented, colors.ToImmutableSortedSet(), endIsFragmented
+                startIsFragmented, subColors.ToImmutableSortedSet(), endIsFragmented
             );
         }
 
         public int GetRenderLength()
         {
+            if (this.colors.Count == 0) { return 0; }
+
             var ambiguousIsFullWidth = this.setting.IsFullWidthAmbiguous;
             var start = this.colors[0].ValueRange.Begin;
             var end = this.colors[^1].ValueRange.End;
@@ -157,7 +312,6 @@ namespace txte.Text
             }
             return length;
         }
-        
     }
 
 

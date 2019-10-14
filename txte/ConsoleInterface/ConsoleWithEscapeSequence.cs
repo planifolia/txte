@@ -38,6 +38,8 @@ namespace txte.ConsoleInterface
         public int Width => Console.BufferWidth;
         public Size Size => new Size(this.Width, this.Height);
 
+        public bool KeyAvailable => Console.KeyAvailable;
+
         readonly CoreConsoleKeyReader keyReader;
 
         public async Task<InputEventArgs> ReadKeyOrTimeoutAsync()
@@ -112,6 +114,9 @@ namespace txte.ConsoleInterface
 
                 this.rowCount = from;
             }
+
+            public int Width => this.console.Width;
+
             readonly StringBuilder buffer;
             readonly ConsoleWithEscapeSequence console;
             readonly Size size;

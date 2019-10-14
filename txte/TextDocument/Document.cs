@@ -1,112 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using txte.ConsoleInterface;
 using txte.Settings;
 using txte.Text;
 
 namespace txte.TextDocument
 {
-
-    struct FindingStatus
+    interface IDocument
     {
-        public int LastMatch;
-        public int Direction;
+        List<Row> Rows { get; }
+        Point ValuePosition { get; set; }
+        Point Offset { get; set; }
     }
 
-    class Row
+    interface ITextFinder
     {
-        public Row(string value) : this(value, false) {}
-        public Row(string value, bool asNewLine)
-        {
-            this.Value = value;
-            this.IsModified = asNewLine;
-            this.Render = "";
-        }
-
-        public string Value { get; private set; }
-        public string Render { get; private set; }
-        public bool IsModified { get; private set; }
-
-        public void InsertChar(char c, int at)
-        {
-            this.Value =
-                this.Value.Substring(0, at) + c + this.Value.Substring(at);
-            this.IsModified = true;
-        }
-
-        public void BackSpace(int at)
-        {
-            // requires: (0 < at && at <= this.Value.Length)
-            this.Value =
-                this.Value.Substring(0, at - 1) + this.Value.Substring(at);
-            this.IsModified = true;
-        }
-
-        internal void Establish()
-        {
-            this.IsModified = false;
-        }
-
-        public void UpdateRender(Setting setting)
-        {
-            var tabSize = setting.TabSize;
-            var renderBuilder = new StringBuilder();
-            for (int iValue = 0; iValue < this.Value.Length; iValue++)
-            {
-                if (this.Value[iValue] == '\t')
-                {
-                    renderBuilder.Append(' ');
-                    while (renderBuilder.Length % tabSize != 0) { renderBuilder.Append(' '); }
-                }
-                else
-                {
-                    renderBuilder.Append(this.Value[iValue]);
-                }
-            }
-            this.Render = renderBuilder.ToString();
-        }
-
-        public int ValueXToRenderX(int valueX, Setting setting)
-        {
-            int tabSize = setting.TabSize;
-            bool ambiguousSetting = setting.IsFullWidthAmbiguous;
-            int renderX = 0;
-            for (int i = 0; i < valueX; i++)
-            {
-                if (this.Value[i] == '\t')
-                {
-                    renderX += (tabSize - 1) - (renderX % tabSize);
-                }
-                renderX += this.Value[i].GetEastAsianWidth(ambiguousSetting);
-            }
-            return renderX;
-        }
-        
-        public int RenderXToValueX(int renderX, Setting setting)
-        {   
-            int tabSize = setting.TabSize;
-            bool ambiguousSetting = setting.IsFullWidthAmbiguous;
-            int renderXChecked = 0;
-            for (int valueX = 0; valueX < this.Value.Length; valueX++)
-            {
-                if (this.Value[valueX] == '\t')
-                {
-                    renderXChecked += (tabSize - 1) - (renderXChecked % tabSize);
-                }
-                renderXChecked += this.Value[valueX].GetEastAsianWidth(ambiguousSetting);
-                
-                if (renderXChecked > renderX) return valueX;
-            }
-            return this.Value.Length;
-        }
+        string Current { get; }
     }
 
-    class Document
+    class Document : IDocument
     {
         public static async Task<Document> OpenAsync(string path, Setting setting)
         {
@@ -124,11 +43,7 @@ namespace txte.TextDocument
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
             {
-                doc.Rows.Add(new Row(line));
-            }
-            foreach (var row in doc.Rows)
-            {
-                row.UpdateRender(setting);
+                doc.Rows.Add(new Row(setting, line));
             }
 
             return doc;
@@ -155,55 +70,59 @@ namespace txte.TextDocument
         public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public Point Offset { get => this.offset; set => this.offset = value; }
         public bool IsModified => this.Rows.Any(x => x.IsModified);
+        public Temporary<ITextFinder> Finding { get; } = new Temporary<ITextFinder>();
 
         readonly Setting setting;
+
         int renderPositionX;
         Point valuePosition;
         Point offset;
 
-        public FindingStatus Find(string query, FindingStatus finding)
+        public void DrawRow(IScreen screen, int docRow)
         {
-            if (finding.LastMatch == -1) { finding.Direction = 1; }
-            int current = finding.LastMatch;
-            for (int i = 0; i < this.Rows.Count; i++)
+            var renderBase = this.Rows[docRow].Render;
+            ColoredString render;
+            if (this.Finding.HasValue)
             {
-                current += finding.Direction;
-                if (current == -1)
-                {
-                    current = this.Rows.Count - 1;
-                }
-                else if (current == this.Rows.Count) 
-                {
-                    current = 0;
-                }
-
-                var index = this.Rows[current].Value.IndexOf(query);
-                if (index >= 0)
-                {
-                    finding.LastMatch = current;
-                    this.valuePosition.X = index;
-                    this.valuePosition.Y = current;
-                    this.offset.Y = this.Rows.Count; // to scroll up found word to top of screen
-                    break;
-                } 
+                var findingString = this.Finding.Value.Current;
+                var indices = this.Rows[docRow].Value.Indices(findingString);
+                var founds =
+                    indices
+                    .Select(x => new ColorSpan(ColorSet.Found, new Range(x, x + findingString.Length)))
+                    .ToImmutableSortedSet();
+                render = renderBase.Overlay(founds);
             }
+            else
+            {
+                render = renderBase;
+            }
+            var clippedLength =
+                (render.GetRenderLength() - this.Offset.X)
+                .Clamp(0, screen.Width);
+            if (clippedLength > 0)
+            {
+                var clippedRender =
+                    render.SubRenderString(this.Offset.X, clippedLength);
 
-            return finding;
+                screen.AppendRow(clippedRender.ToStyledStrings());
+            }
+            else
+            {
+                screen.AppendRow("");
+            }
         }
 
         public void Save()
         {
             if (this.Path == null) { return; }
-            using (var file = new StreamWriter(this.Path, false, Encoding.UTF8))
+            using var file = new StreamWriter(this.Path, false, Encoding.UTF8);
+            int rowCount = 0;
+            foreach (var row in this.Rows)
             {
-                int rowCount = 0;
-                foreach (var row in this.Rows)
-                {
-                    file.Write(row.Value);
-                    if (rowCount != this.Rows.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
-                    row.Establish();
-                    rowCount++;
-                }
+                file.Write(row.Value);
+                if (rowCount != this.Rows.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
+                row.Establish();
+                rowCount++;
             }
         }
 
@@ -211,10 +130,9 @@ namespace txte.TextDocument
         {
             if (this.valuePosition.Y == this.Rows.Count)
             {
-                this.Rows.Add(new Row(""));
+                this.Rows.Add(new Row(this.setting, ""));
             }
             this.Rows[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
-            this.Rows[this.valuePosition.Y].UpdateRender(this.setting);
             this.MoveRight();
         }
 
@@ -223,24 +141,24 @@ namespace txte.TextDocument
             if (this.valuePosition.X == 0)
             {
                 // it condition contains that case: this.valuePosition.Y == this.Rows.Count.
-                this.Rows.Insert(this.ValuePosition.Y, new Row("", asNewLine: true));
+                this.Rows.Insert(this.ValuePosition.Y, new Row(this.setting, "", asNewLine: true));
             }
             else
             {
                 this.Rows.Insert(
                     this.ValuePosition.Y + 1,
                     new Row(
+                        this.setting,
                         this.Rows[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
                         asNewLine: true
                     )
                 );
                 this.Rows[this.ValuePosition.Y] = 
                     new Row(
+                        this.setting,
                         this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
                         asNewLine: true
                     );
-                this.Rows[this.valuePosition.Y].UpdateRender(this.setting);
-                this.Rows[this.valuePosition.Y + 1].UpdateRender(this.setting);
             }
             this.MoveHome();
             this.MoveDown();
@@ -269,17 +187,16 @@ namespace txte.TextDocument
                     // Delete new line of previous line
                     this.Rows[position.Y - 1] =
                         new Row(
+                            this.setting,
                             this.Rows[position.Y - 1].Value + this.Rows[position.Y].Value,
                             asNewLine: true
                         );
-                    this.Rows[position.Y - 1].UpdateRender(this.setting);
                     this.Rows.RemoveAt(position.Y);
                 }
             }
             else
             {
                 this.Rows[position.Y].BackSpace(position.X);
-                this.Rows[position.Y].UpdateRender(this.setting);
             }
         }
 
@@ -340,7 +257,7 @@ namespace txte.TextDocument
         }
         public void MoveDown()
         {
-            this.valuePosition.Y++;
+            if (this.valuePosition.Y < this.Rows.Count - 1) { this.valuePosition.Y++; }
             this.ClampPosition();
         }
         void ClampPosition()
@@ -363,6 +280,25 @@ namespace txte.TextDocument
             }
         }
 
+        public void MoveUp(int repeat)
+        {
+            for (int i = 0; i < repeat; i++)
+            {
+                this.MoveUp();
+            }
+        }
+        public void MoveDown(int repeat)
+        {
+            if (this.valuePosition.Y > this.Rows.Count)
+            {
+                this.valuePosition.Y = this.Rows.Count;
+            }
+            for (int i = 0; i < repeat; i++)
+            {
+                this.MoveDown();
+            }
+        }
+
         public void MoveHome()
         {
             this.valuePosition.X = 0;
@@ -379,26 +315,19 @@ namespace txte.TextDocument
                 this.valuePosition.Y = this.Rows.Count;
             }
         }
+
         public void MovePageUp(int consoleHeight)
         {
             this.valuePosition.Y = this.offset.Y;
-            for (int i = 0; i < consoleHeight; i++)
-            {
-                this.MoveUp();
-            }
+            this.MoveUp(consoleHeight);
         }
         public void MovePageDown(int consoleHeight)
         {
             this.valuePosition.Y = this.offset.Y + consoleHeight - 1;
-            if (this.valuePosition.Y > this.Rows.Count)
-            {
-                this.valuePosition.Y = this.Rows.Count;
-            }
-            for (int i = 0; i < consoleHeight; i++)
-            {
-                this.MoveDown();
-            }
+            this.MoveDown(consoleHeight);
+
         }
+
         public void MoveStartOfFile()
         {
             this.valuePosition.X = 0;
@@ -426,7 +355,7 @@ namespace txte.TextDocument
             if (this.valuePosition.Y < this.Rows.Count)
             {
                 this.renderPositionX =
-                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X, this.setting);
+                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X);
                 if (this.valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
                 {
                     overshoot =

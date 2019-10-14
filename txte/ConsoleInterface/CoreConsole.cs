@@ -22,6 +22,8 @@ namespace txte.ConsoleInterface
         public int Width => Console.BufferWidth - 1;
         public Size Size => new Size(this.Width, this.Height);
 
+        public bool KeyAvailable => Console.KeyAvailable;
+
         readonly CoreConsoleKeyReader keyReader;
 
         OriginatedColor defaultForegroundColor;
@@ -117,6 +119,8 @@ namespace txte.ConsoleInterface
                 this.rowCount = from;
                 this.ambuguosIsfullWidth = ambuguosIsfullWidth;
             }
+
+            public int Width => this.console.Width;
 
             readonly CoreConsole console;
             readonly Size size;

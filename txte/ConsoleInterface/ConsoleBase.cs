@@ -9,6 +9,7 @@ namespace txte.ConsoleInterface
 {
     interface IConsoleInput
     {
+        bool KeyAvailable { get; }
         Task<InputEventArgs> ReadKeyOrTimeoutAsync();
     }
 
@@ -31,6 +32,8 @@ namespace txte.ConsoleInterface
 
     interface IScreen
     {
+        int Width { get; }
+
         void AppendRow(string value);
         void AppendRow(IEnumerable<StyledString> spans);
         void AppendOuterRow(string value);
