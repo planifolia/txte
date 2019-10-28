@@ -27,6 +27,15 @@ namespace txte.Text
 
         public static implicit operator ThemeColor(ConsoleColor color) => 
             new ThemeColor(ColorType.User, color);
+
+        public override string ToString() =>
+            this.Type switch
+            {
+                ColorType.User => this.Color.ToString(),
+                ColorType.Foreground => "Foreground",
+                ColorType.Background => "Background",
+                _ => "?"
+            };
     }
     
     struct ColorSet
@@ -57,5 +66,7 @@ namespace txte.Text
 
         public readonly ThemeColor Foreground;
         public readonly ThemeColor Background;
+
+        public override string ToString() => $"<{this.Foreground}:{this.Background}>";
     }
 }

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
 using txte.Settings;
@@ -5,22 +7,102 @@ using txte.Text;
 
 namespace txte.TextDocument
 {
-    class StringLayser
+    class StringLayer
     {
-        public StringLayser(string value)
+        public StringLayer(string value)
         {
             this.value = value;
             this.IsUpdated = true;
         }
 
-        public bool IsUpdated;
+        public bool IsUpdated { get; private set; }
+
         public string Value
         {
             get => this.value;
             set => (this.value, this.IsUpdated) = (value, true);
         }
+
         string value;
 
+        public void FetchUpdate(Action<string> action)
+        {
+            action(this.value);
+            this.IsUpdated = false;
+        }
+    }
+    class FigureStringLayer
+    {
+        public FigureStringLayer(Setting setting, StringLayer source)
+        {
+            this.setting = setting;
+            this.source = source;
+            this.IsUpdated = true;
+
+            this.Update();
+        }
+
+        public bool IsUpdated;
+        public string Value
+        {
+            get
+            {
+                if (this.source.IsUpdated) { this.Update(); }
+                return this.value;
+            }
+        }
+
+        public IReadOnlyList<int> Boundaries
+        {
+            get
+            {
+                if (this.source.IsUpdated) { this.Update(); }
+                return this.boundaries;
+            }
+        }
+
+        readonly Setting setting;
+        readonly StringLayer source;
+
+        string value = default!;
+        int[] boundaries = default!;
+
+        void Update()
+        {
+            this.source.FetchUpdate(this.Update);
+        }
+
+        void Update(string source)
+        {
+            this.boundaries = new int[source.Length + 1];
+            var tabSize = this.setting.TabSize;
+            var ambiguousSetting = this.setting.IsFullWidthAmbiguous;
+            var figureBuilder = new StringBuilder();
+            int figurePosition = 0;
+            for (int iSource = 0; iSource < source.Length; iSource++)
+            {
+                var currentChar = source[iSource];
+                this.boundaries[iSource] = figurePosition;
+                if (currentChar == '\t')
+                {
+                    figureBuilder.Append(' ');
+                    figurePosition++;
+                    while (figureBuilder.Length % tabSize != 0)
+                    {
+                        figureBuilder.Append(' ');
+                        figurePosition++;
+                    }
+                }
+                else
+                {
+                    figureBuilder.Append(currentChar);
+                    figurePosition += currentChar.GetEastAsianWidth(ambiguousSetting);
+                }
+            }
+            this.boundaries[source.Length] = figurePosition;
+            this.value = figureBuilder.ToString();
+            this.IsUpdated = true;
+        }
     }
     class ColoredStringLayser
     {
@@ -50,15 +132,16 @@ namespace txte.TextDocument
     class Row
     {
         public Row(Setting setting, string value) : this(setting, value, false) {}
-        public Row(Setting setting, string value, bool asNewLine)
+        public Row(Setting setting, string value, bool isNewLine)
         {
             this.setting = setting;
-            this.valueLayer = new StringLayser(value);
-            this.IsModified = asNewLine;
-            this.renderLayer = new StringLayser("");
+            this.valueLayer = new StringLayer(value);
+            this.IsModified = isNewLine;
+            this.figureLayer = new FigureStringLayer(setting, this.valueLayer);
         }
 
         public string Value => this.valueLayer.Value;
+        public IReadOnlyList<int> Boundaries => this.figureLayer.Boundaries;
 
         public ColorLayer SyntaxColorLayer { get; set; } = default!;
 
@@ -66,11 +149,10 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.valueLayer.IsUpdated) {this.UpdateRender(); }
-                if (this.renderLayer.IsUpdated)
+                if (this.figureLayer.IsUpdated)
                 {
-                    this.syntaxCache = new ColoredString(this.setting, this.renderLayer.Value);
-                    this.renderLayer.IsUpdated = false;
+                    this.syntaxCache = new ColoredString(this.setting, this.figureLayer.Value);
+                    this.figureLayer.IsUpdated = false;
                 }
                 return this.syntaxCache;
             }
@@ -80,8 +162,8 @@ namespace txte.TextDocument
 
         readonly Setting setting;
 
-        StringLayser valueLayer;
-        StringLayser renderLayer;
+        readonly StringLayer valueLayer;
+        readonly FigureStringLayer figureLayer;
         ColoredString syntaxCache;
 
         public void InsertChar(char c, int at)
@@ -99,61 +181,24 @@ namespace txte.TextDocument
             this.IsModified = true;
         }
 
-        public void Establish()
+        public void Establish(Action<string> action)
         {
+            action(this.Value);
             this.IsModified = false;
         }
 
-        void UpdateRender()
-        {
-            var tabSize = this.setting.TabSize;
-            var renderBuilder = new StringBuilder();
-            for (int iValue = 0; iValue < this.Value.Length; iValue++)
-            {
-                if (this.Value[iValue] == '\t')
-                {
-                    renderBuilder.Append(' ');
-                    while (renderBuilder.Length % tabSize != 0) { renderBuilder.Append(' '); }
-                }
-                else
-                {
-                    renderBuilder.Append(this.Value[iValue]);
-                }
-            }
-            this.renderLayer.Value = renderBuilder.ToString();
-            this.valueLayer.IsUpdated = false;
-        }
 
         public int ValueXToRenderX(int valueX)
         {
-            int tabSize = this.setting.TabSize;
-            bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
-            int renderX = 0;
-            for (int i = 0; i < valueX; i++)
-            {
-                if (this.Value[i] == '\t')
-                {
-                    renderX += (tabSize - 1) - (renderX % tabSize);
-                }
-                renderX += this.Value[i].GetEastAsianWidth(ambiguousSetting);
-            }
-            return renderX;
+            return this.figureLayer.Boundaries[valueX];
         }
         
         public int RenderXToValueX(int renderX)
-        {   
-            int tabSize = this.setting.TabSize;
-            bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
-            int renderXChecked = 0;
-            for (int valueX = 0; valueX < this.Value.Length; valueX++)
+        {
+            var boundaries = this.figureLayer.Boundaries;
+            for (int iValueX = 0; iValueX < this.Value.Length; iValueX++)
             {
-                if (this.Value[valueX] == '\t')
-                {
-                    renderXChecked += (tabSize - 1) - (renderXChecked % tabSize);
-                }
-                renderXChecked += this.Value[valueX].GetEastAsianWidth(ambiguousSetting);
-                
-                if (renderXChecked > renderX) return valueX;
+                if (boundaries[iValueX] > renderX) return iValueX;
             }
             return this.Value.Length;
         }

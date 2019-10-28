@@ -133,6 +133,9 @@ namespace txte.TextEditor
                     () => this.DelegateTask(this.document.BackSpace),
                 [new KeyBind(new KeyCombination(ConsoleKey.Delete, false, false), "Delete a Right Letter")] =
                     () => this.DelegateTask(this.document.DeleteChar),
+
+                [new KeyBind(new KeyCombination(ConsoleKey.Tab, false, false), "Insert Tab Letter")] =
+                    () => this.DelegateTask(() => this.document.InsertChar('\t')),
             };
 
         Task<ProcessResult> DelegateTask(Action action)
@@ -521,23 +524,11 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var savedPosition = this.document.ValuePosition;
-            var savedOffset = this.document.Offset;
-
-            var finder = new FindPrompt("Search:", this.document);
+            var finder = new TextFinder(this.document);
             using var _ = this.document.Finding.SetTemporary(finder);
+            var findPrompt = new FindPrompt("Search:", finder);
 
-            var promptResult = await this.Prompt(finder);
-            if (promptResult is ModalOk<(string pattern, FindingStatus status)>(var query))
-            {
-                // remain cursor position
-            }
-            else
-            {
-                // restore cursor position
-                this.document.ValuePosition = savedPosition;
-                this.document.Offset = savedOffset;
-            }
+            await this.Prompt(findPrompt);
 
             return ProcessResult.Running;
         }

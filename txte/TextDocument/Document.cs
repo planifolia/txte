@@ -23,6 +23,7 @@ namespace txte.TextDocument
     interface ITextFinder
     {
         string Current { get; }
+        Coloring Highlight(Row row);
     }
 
     class Document : IDocument
@@ -82,14 +83,9 @@ namespace txte.TextDocument
         {
             var renderBase = this.Rows[docRow].Render;
             ColoredString render;
-            if (this.Finding.HasValue)
+            if (this.Finding.HasValue && this.Finding.Value.Current.Length != 0)
             {
-                var findingString = this.Finding.Value.Current;
-                var indices = this.Rows[docRow].Value.Indices(findingString);
-                var founds =
-                    indices
-                    .Select(x => new ColorSpan(ColorSet.Found, new Range(x, x + findingString.Length)))
-                    .ToImmutableSortedSet();
+                var founds = this.Finding.Value.Highlight(this.Rows[docRow]);
                 render = renderBase.Overlay(founds);
             }
             else
@@ -97,8 +93,7 @@ namespace txte.TextDocument
                 render = renderBase;
             }
             var clippedLength =
-                (render.GetRenderLength() - this.Offset.X)
-                .Clamp(0, screen.Width);
+                (render.GetRenderLength() - this.Offset.X).Clamp(0, screen.Width);
             if (clippedLength > 0)
             {
                 var clippedRender =
@@ -119,9 +114,8 @@ namespace txte.TextDocument
             int rowCount = 0;
             foreach (var row in this.Rows)
             {
-                file.Write(row.Value);
+                row.Establish(x => file.Write(x));
                 if (rowCount != this.Rows.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
-                row.Establish();
                 rowCount++;
             }
         }
@@ -141,7 +135,7 @@ namespace txte.TextDocument
             if (this.valuePosition.X == 0)
             {
                 // it condition contains that case: this.valuePosition.Y == this.Rows.Count.
-                this.Rows.Insert(this.ValuePosition.Y, new Row(this.setting, "", asNewLine: true));
+                this.Rows.Insert(this.ValuePosition.Y, new Row(this.setting, "", isNewLine: true));
             }
             else
             {
@@ -150,14 +144,14 @@ namespace txte.TextDocument
                     new Row(
                         this.setting,
                         this.Rows[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
-                        asNewLine: true
+                        isNewLine: true
                     )
                 );
                 this.Rows[this.ValuePosition.Y] = 
                     new Row(
                         this.setting,
                         this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
-                        asNewLine: true
+                        isNewLine: true
                     );
             }
             this.MoveHome();
@@ -189,7 +183,7 @@ namespace txte.TextDocument
                         new Row(
                             this.setting,
                             this.Rows[position.Y - 1].Value + this.Rows[position.Y].Value,
-                            asNewLine: true
+                            isNewLine: true
                         );
                     this.Rows.RemoveAt(position.Y);
                 }

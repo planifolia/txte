@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using txte.State;
 using txte.Text;
 using txte.TextDocument;
@@ -9,49 +10,134 @@ namespace txte.Prompts
 {
     struct FindingStatus
     {
-        public int LastMatch;
-        public int Direction;
     }
 
-    class FindPrompt : IPrompt, IPrompt<(string pattern, FindingStatus findStatus)>, ITextFinder
+    class TextFinder : ITextFinder
     {
-     
-        public FindPrompt(string message, IDocument documen)
+        public TextFinder(IDocument document)
         {
-            this.prompt = new InputPrompt(message);
-            this.document = documen;
+
+            this.document = document;
             this.savedPosition = this.document.ValuePosition;
             this.savedOffset = this.document.Offset;
 
-            this.findingStatus = new FindingStatus { Direction = 1, LastMatch = -1 };
-            this.findedStatus = this.findingStatus;
+            this.Current = "";
+            this.direction = 1;
+            this.lastMatch = -1;
         }
+        public string Current { get; private set; }
 
-        public string Current => this.prompt.Current;
-
-        readonly InputPrompt prompt;
         readonly IDocument document;
         readonly Point savedPosition;
         readonly Point savedOffset;
-        FindingStatus findedStatus;
-        FindingStatus findingStatus;
 
-        public ModalProcessResult<(string pattern, FindingStatus findStatus)> ProcessKey(ConsoleKeyInfo keyInfo)
+        int lastMatch;
+        int direction;
+
+        public void FindFirst(string query)
+        {
+            this.Current = query;
+            this.direction = 1;
+            this.lastMatch = -1;
+            this.Find();
+        }
+
+        public void FindNext(string query)
+        {
+            this.Current = query;
+            this.direction = 1;
+            this.Find();
+        }
+        public void FindPrevious(string query)
+        {
+            this.Current = query;
+            this.direction = -1;
+            this.Find();
+        }
+
+        public void Find()
+        {
+            // find first word when beginning finding or losing pattern
+            if (this.lastMatch == -1) { this.direction = 1; }
+
+            int findingRow = this.lastMatch;
+            for (int i = 0; i < this.document.Rows.Count; i++)
+            {
+                findingRow += this.direction;
+                // wrap arround at start / end of file
+                if (findingRow == -1)
+                {
+                    findingRow = this.document.Rows.Count - 1;
+                }
+                else if (findingRow == this.document.Rows.Count)
+                {
+                    findingRow = 0;
+                }
+
+                var index = this.document.Rows[findingRow].Value.IndexOf(this.Current);
+                if (index >= 0)
+                {
+                    this.lastMatch = findingRow;
+                    this.document.ValuePosition = new Point(index, findingRow);
+                    // to scroll up found word to top of screen
+                    this.document.Offset = new Point(this.document.Offset.X, this.document.Rows.Count);
+                    break;
+                }
+            }
+        }
+
+        public void RestorePosition()
+        {
+            // restore cursor position
+            this.document.ValuePosition = this.savedPosition;
+            this.document.Offset = this.savedOffset;
+        }
+
+        public Coloring Highlight(Row row)
+        {
+            var indices = row.Value.Indices(this.Current);
+            var founds =
+                indices
+                .Select(
+                    x =>
+                    {
+                        var boundaries = row.Boundaries;
+                        return new ColorSpan(
+                            ColorSet.Found,
+                            new Range(boundaries[x], boundaries[x + this.Current.Length])
+                        );
+                    }
+                )
+                .ToList();
+            return new Coloring(founds);
+        }
+    }
+
+    class FindPrompt : IPrompt, IPrompt<string>
+    {
+     
+        public FindPrompt(string message, TextFinder finder)
+        {
+            this.prompt = new InputPrompt(message);
+            this.finder = finder;
+        }
+
+
+        readonly InputPrompt prompt;
+        readonly TextFinder finder;
+
+        public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
         {
             switch (keyInfo)
             {
                 // Search Forward
                 case { Key: ConsoleKey.Tab, Modifiers: (ConsoleModifiers)0 }:
-                    this.findingStatus.Direction = 1;
-                    this.findedStatus = this.findingStatus;
-                    this.findingStatus = this.Find(this.prompt.Current, this.findedStatus);
+                    this.finder.FindNext(this.prompt.Current);
                     return ModalNeedsRefreash.Default;
 
                 // Search Backward
                 case { Key: ConsoleKey.Tab, Modifiers: ConsoleModifiers.Shift }:
-                    this.findingStatus.Direction = -1;
-                    this.findedStatus = this.findingStatus;
-                    this.findingStatus = this.Find(this.prompt.Current, this.findedStatus);
+                    this.finder.FindPrevious(this.prompt.Current);
                     return ModalNeedsRefreash.Default;
 
                 default:
@@ -62,20 +148,17 @@ namespace txte.Prompts
 
             if (baseResult is ModalOk<string> result)
             {
-                return ModalOk.Create((result.Result, this.findedStatus));
+                return ModalOk.Create(result.Result);
             }
             else if (baseResult is IModalRunning)
             {
-                this.findedStatus = new FindingStatus{ Direction = 1, LastMatch = -1 };
-                this.findingStatus = this.Find(this.prompt.Current, this.findedStatus);
+                this.finder.FindFirst(this.prompt.Current);
                 return ModalNeedsRefreash.Default;
             }
             else if (baseResult is IModalCancel)
             {
                 // restore cursor position
-                this.document.ValuePosition = this.savedPosition;
-                this.document.Offset = this.savedOffset;
-
+                this.finder.RestorePosition();
                 return ModalCancel.Default;
             }
             else
@@ -87,37 +170,5 @@ namespace txte.Prompts
         public IEnumerable<StyledString> ToStyledString() =>
             this.prompt.ToStyledString();
 
-        FindingStatus Find(string query, FindingStatus finding)
-        {
-            // find first word when beginning finding or losing pattern
-            if (finding.LastMatch == -1) { finding.Direction = 1; }
-
-            int current = finding.LastMatch;
-            for (int i = 0; i < this.document.Rows.Count; i++)
-            {
-                current += finding.Direction;
-                // wrap arround at start / end of file
-                if (current == -1)
-                {
-                    current = this.document.Rows.Count - 1;
-                }
-                else if (current == this.document.Rows.Count)
-                {
-                    current = 0;
-                }
-
-                var index = this.document.Rows[current].Value.IndexOf(query);
-                if (index >= 0)
-                {
-                    finding.LastMatch = current;
-                    this.document.ValuePosition = new Point(index, current);
-                    // to scroll up found word to top of screen
-                    this.document.Offset = new Point(this.document.Offset.X, this.document.Rows.Count);
-                    break;
-                }
-            }
-
-            return finding;
-        }
     }
 }
