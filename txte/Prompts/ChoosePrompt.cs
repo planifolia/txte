@@ -12,7 +12,7 @@ namespace txte.Prompts
             string message, IReadOnlyList<TChoice> choices, TChoice? default_choice = null
         ) where TChoice : class, IChoice =>
             new ChoosePrompt<TChoice>(message, choices, default_choice);
-        
+
     }
 
     class ChoosePrompt<TChoice> : IPrompt<TChoice> where TChoice : class, IChoice
@@ -27,7 +27,7 @@ namespace txte.Prompts
             }
             else
             {
-                this.choosenIndex = 
+                this.choosenIndex =
                     this.choices
                     .Select((c, i) => (c, i))
                     .Where(x => x.c == default_choice)
@@ -76,7 +76,8 @@ namespace txte.Prompts
             var choiceCount = this.choices.Count;
             for (int i = 0; i < choiceCount; i++)
             {
-                if (i != 0) {
+                if (i != 0)
+                {
                     styled.Add(new StyledString(" / "));
                 }
                 var colorSet = (i == this.choosenIndex) ? ColorSet.Reversed : ColorSet.Default;
@@ -103,9 +104,9 @@ namespace txte.Prompts
         {
             foreach (var choice in this.choices)
             {
-                if (choice.Shortcut ==keyChar) { return choice; }
+                if (choice.Shortcut == keyChar) { return choice; }
             }
-            
+
             return null;
         }
     }

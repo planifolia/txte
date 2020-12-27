@@ -99,7 +99,7 @@ namespace txte.ConsoleInterface
             this.defaultForegroundColor =
                 new OriginatedColor(ColorType.Foreground, Console.ForegroundColor);
             this.BackgroundColor =
-            this.defaultBackgroundColor 
+            this.defaultBackgroundColor
                 = new OriginatedColor(ColorType.Background, Console.BackgroundColor);
         }
 
@@ -243,7 +243,7 @@ namespace txte.ConsoleInterface
             }
 
             public readonly ColorType Origin;
-            public readonly ConsoleColor Color; 
+            public readonly ConsoleColor Color;
 
             public ConsoleColor GetColorFor(ColorType target)
             {
@@ -253,11 +253,11 @@ namespace txte.ConsoleInterface
                 if ((int)this.Color != -1) { return this.Color; }
 
                 // Return the color assumed that color scheme is dark if the console color is reversed. 
-                if (target == ColorType.Foreground  && this.Origin == ColorType.Background)
+                if (target == ColorType.Foreground && this.Origin == ColorType.Background)
                 {
                     return ConsoleColor.Black;
                 }
-                else if (target == ColorType.Background  && this.Origin == ColorType.Foreground)
+                else if (target == ColorType.Background && this.Origin == ColorType.Foreground)
                 {
                     return ConsoleColor.Gray;
                 }
@@ -267,7 +267,7 @@ namespace txte.ConsoleInterface
                 }
             }
         }
-        
+
         #region IDisposable Support
         bool disposedValue = false;
 

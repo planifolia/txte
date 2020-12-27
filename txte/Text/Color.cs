@@ -25,7 +25,7 @@ namespace txte.Text
         public readonly ColorType Type;
         public readonly ConsoleColor Color;
 
-        public static implicit operator ThemeColor(ConsoleColor color) => 
+        public static implicit operator ThemeColor(ConsoleColor color) =>
             new ThemeColor(ColorType.User, color);
 
         public override string ToString() =>
@@ -37,14 +37,14 @@ namespace txte.Text
                 _ => "?"
             };
     }
-    
+
     struct ColorSet
     {
         public static readonly ColorSet Default =
             new ColorSet(ThemeColor.Foreground, ThemeColor.Background);
         public static readonly ColorSet Reversed =
             new ColorSet(ThemeColor.Background, ThemeColor.Foreground);
-        public static readonly ColorSet Fragment = 
+        public static readonly ColorSet Fragment =
             new ColorSet(ConsoleColor.Blue, ThemeColor.Foreground);
 
         public static readonly ColorSet Found =
@@ -52,10 +52,10 @@ namespace txte.Text
 
         public static readonly ColorSet OutOfBounds =
             new ColorSet(ConsoleColor.DarkCyan, ThemeColor.Background);
-        public static readonly ColorSet SystemMessage = 
+        public static readonly ColorSet SystemMessage =
             new ColorSet(ConsoleColor.White, ConsoleColor.DarkCyan);
 
-        public static readonly ColorSet KeyExpression = 
+        public static readonly ColorSet KeyExpression =
             new ColorSet(ConsoleColor.Gray, ConsoleColor.DarkGray);
 
         public ColorSet(ThemeColor foreground, ThemeColor background)

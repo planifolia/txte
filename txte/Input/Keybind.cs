@@ -24,7 +24,7 @@ namespace txte.Input
             this.keys = keys.ToArray();
             this.explanation = explanation;
         }
-        
+
         public readonly KeyCombination combination;
         public readonly string[] keys;
         public readonly string explanation;
@@ -40,12 +40,13 @@ namespace txte.Input
 
         public Func<Task<ProcessResult>> this[KeyBind keyBind]
         {
-            set {
+            set
+            {
                 this.keyBinds.Add(keyBind);
                 this.functions[keyBind.combination] = value;
             }
         }
-        
+
         public Func<Task<ProcessResult>>? this[KeyCombination shortcutKey]
         {
             get =>

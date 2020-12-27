@@ -13,7 +13,7 @@ namespace txte.Settings
         public static readonly IReadOnlyList<EndOfLineFormat> All =
             new EndOfLineFormat[] { LF, CR, CRLF };
 
-        public static EndOfLineFormat FromSequence(string sequence) => 
+        public static EndOfLineFormat FromSequence(string sequence) =>
             sequence switch
             {
                 "\n" => EndOfLineFormat.LF,

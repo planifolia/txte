@@ -115,7 +115,7 @@ namespace txte.Prompts
 
     class FindPrompt : IPrompt, IPrompt<string>
     {
-     
+
         public FindPrompt(string message, TextFinder finder)
         {
             this.prompt = new InputPrompt(message);
@@ -166,7 +166,7 @@ namespace txte.Prompts
                 return ModalUnhandled.Default;
             }
         }
-        
+
         public IEnumerable<StyledString> ToStyledString() =>
             this.prompt.ToStyledString();
 

@@ -15,7 +15,7 @@ namespace txte.Input
         public readonly bool Alted;
         public readonly bool Controled;
 
-        public KeyCombination WithControl() => 
+        public KeyCombination WithControl() =>
             new KeyCombination(this.Key, this.Shifted, this.Alted, true);
     }
 

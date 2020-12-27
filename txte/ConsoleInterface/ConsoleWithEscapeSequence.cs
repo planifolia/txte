@@ -215,8 +215,8 @@ namespace txte.ConsoleInterface
 
         ~ConsoleWithEscapeSequence()
         {
-          // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
-          Dispose(false);
+            // このコードを変更しないでください。クリーンアップ コードを上の Dispose(bool disposing) に記述します。
+            Dispose(false);
         }
 
         public void Dispose()

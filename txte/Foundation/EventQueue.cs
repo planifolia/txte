@@ -56,14 +56,14 @@ namespace txte
                 this.queue.Enqueue(new InputEvent(eventArgs));
             }
         }
-        
+
         public async Task<InputEventArgs> RecieveReadKeyEventAsync()
         {
             while (true)
             {
                 lock (this.queue)
                 {
-                    while(this.queue.TryPeek(out var closableEvent) && closableEvent.IsHandled)
+                    while (this.queue.TryPeek(out var closableEvent) && closableEvent.IsHandled)
                     {
                         this.queue.Dequeue();
                     }

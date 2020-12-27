@@ -40,7 +40,7 @@ namespace txte.TextEditor
         Document document;
         Message message;
 
-        Size editArea => 
+        Size editArea =>
             new Size(
                 this.console.Size.Width,
                 this.console.Size.Height
@@ -56,7 +56,7 @@ namespace txte.TextEditor
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
-                { 
+                {
                     this.FadeMessage();
                     continue;
                 }
@@ -209,7 +209,7 @@ namespace txte.TextEditor
         {
             this.document.DrawRow(screen, docRow);
         }
-        
+
         void DrawMenu(IScreen screen, int y)
         {
             var keyJoiner = " + ";
@@ -219,7 +219,7 @@ namespace txte.TextEditor
             if (y - titleRowCount >= this.menu.KeyBinds.KeyBinds.Count)
             {
                 screen.AppendRow(new[]
-                { 
+                {
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
             }
@@ -229,7 +229,7 @@ namespace txte.TextEditor
                 var messageLength = message.Length;
                 var leftPadding = (this.console.Width - messageLength) / 2 - 1;
                 screen.AppendRow(new[]
-                { 
+                {
                     new StyledString("~", ColorSet.OutOfBounds),
                     new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
                     new StyledString(message, ColorSet.OutOfBounds),
@@ -238,7 +238,7 @@ namespace txte.TextEditor
             else if (y == 1)
             {
                 screen.AppendRow(new[]
-                { 
+                {
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
                 return;
@@ -258,7 +258,8 @@ namespace txte.TextEditor
                 int i = 0;
                 foreach (var key in item.keys)
                 {
-                    if (i != 0) {
+                    if (i != 0)
+                    {
                         spans.Add(new StyledString(keyJoiner, ColorSet.OutOfBounds));
                     }
                     spans.Add(new StyledString(key, ColorSet.KeyExpression));
@@ -304,7 +305,7 @@ namespace txte.TextEditor
         {
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
             var fileNameLength = fileName.Length.AtMax(20);
-            (var clippedFileName, _, _) = 
+            (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
@@ -320,7 +321,7 @@ namespace txte.TextEditor
             var textLength = text.GetRenderLength();
             var displayLength = textLength.AtMax(this.console.Width);
             var render = text.SubRenderString(textLength - displayLength, displayLength);
-            var prefix = 
+            var prefix =
                 (displayLength < this.console.Width) ? new[]
                 {
                     new StyledString("~", ColorSet.OutOfBounds),
@@ -329,7 +330,7 @@ namespace txte.TextEditor
                 : Enumerable.Empty<StyledString>();
             screen.AppendRow(prefix.Concat(render.ToStyledStrings()));
         }
-        
+
         async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
         {
             using var _ = this.prompt.SetTemporary(prompt);
@@ -339,7 +340,7 @@ namespace txte.TextEditor
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
-                { 
+                {
                     this.FadeMessage();
                     continue;
                 }
@@ -360,13 +361,13 @@ namespace txte.TextEditor
                 }
             }
         }
-        
+
 
         private async Task<ProcessResult> OpenMenu()
         {
             using var _ = this.menu.ShowWhileModal();
 
-            using var message = 
+            using var message =
                 new TemporaryMessage(ColoredString.Concat(this.setting,
                     ("hint: You can omit ", ColorSet.OutOfBounds),
                     ("Crtl", ColorSet.KeyExpression),
@@ -380,12 +381,12 @@ namespace txte.TextEditor
             {
                 (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
-                { 
+                {
                     this.FadeMessage();
                     continue;
                 }
                 if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
-                
+
                 if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
                 {
                     message.Expire();
@@ -428,14 +429,14 @@ namespace txte.TextEditor
         {
             if (!this.document.IsModified) { return ProcessResult.Quit; }
 
-            var promptResult = 
+            var promptResult =
                 await this.Prompt(
                     ChoosePrompt.Create(
                         "File has unsaved changes. Quit without saving?",
                         new[] { Choice.No, Choice.Yes }
                     )
                 );
-            if (promptResult is ModalOk<Choice>(var confirm) && confirm  == Choice.Yes)
+            if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.Yes)
             {
                 return ProcessResult.Quit;
             }
@@ -445,7 +446,7 @@ namespace txte.TextEditor
             }
         }
 
-        async Task<ProcessResult> Save() => 
+        async Task<ProcessResult> Save() =>
             await ((this.document.Path == null) ? this.SaveAs() : this.SaveWithConfirm());
 
         async Task<ProcessResult> SaveAs()
@@ -480,7 +481,7 @@ namespace txte.TextEditor
             {
                 if (File.Exists(this.document.Path))
                 {
-                    var promptResult = 
+                    var promptResult =
                         await this.Prompt(
                             ChoosePrompt.Create(
                                 "Override?",
@@ -535,7 +536,7 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> ChangeEndOfLine()
         {
-            var promptResult = 
+            var promptResult =
                 await this.Prompt(
                     ChoosePrompt.Create(
                         "Change End of Line sequence:",
@@ -557,7 +558,7 @@ namespace txte.TextEditor
                     new TemporaryMessage(ColoredString.Concat(this.setting,
                         ("hint: Set according to your terminal font. Usually Half-Width", ColorSet.OutOfBounds)));
             this.message = message;
-            var modalResult = 
+            var modalResult =
                 await this.Prompt(
                     ChoosePrompt.Create(
                         "Change East Asian Width - Ambiguous:",

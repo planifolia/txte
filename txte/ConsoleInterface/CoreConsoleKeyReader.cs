@@ -19,7 +19,7 @@ namespace txte.ConsoleInterface
 
         public async Task<InputEventArgs> ReadKeyOrTimeoutAsync() =>
             await this.eventQueue.RecieveReadKeyEventAsync();
-        
+
         void StartListen()
         {
             var userInput = GenerateEventAsync(

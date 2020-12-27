@@ -131,13 +131,14 @@ namespace txte.TextDocument
 
     class Row
     {
-        public Row(Setting setting, string value) : this(setting, value, false) {}
+        public Row(Setting setting, string value) : this(setting, value, false) { }
         public Row(Setting setting, string value, bool isNewLine)
         {
             this.setting = setting;
             this.valueLayer = new StringLayer(value);
             this.IsModified = isNewLine;
             this.figureLayer = new FigureStringLayer(setting, this.valueLayer);
+            this.syntaxCache = null!;
         }
 
         public string Value => this.valueLayer.Value;
@@ -157,7 +158,7 @@ namespace txte.TextDocument
                 return this.syntaxCache;
             }
         }
-        
+
         public bool IsModified { get; private set; }
 
         readonly Setting setting;
@@ -192,7 +193,7 @@ namespace txte.TextDocument
         {
             return this.figureLayer.Boundaries[valueX];
         }
-        
+
         public int RenderXToValueX(int renderX)
         {
             var boundaries = this.figureLayer.Boundaries;

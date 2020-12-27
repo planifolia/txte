@@ -56,7 +56,7 @@
             var endIsFragmented = start + length < consolePos;
             var valueEnd = valuePos - (endIsFragmented ? 1 : 0);
             return (value.Substring(valueStart, valueEnd - valueStart), startIsFragmented, endIsFragmented);
-            
+
         }
     }
 }

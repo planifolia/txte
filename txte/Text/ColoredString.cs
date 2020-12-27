@@ -14,7 +14,7 @@ namespace txte.Text
             var colors = new List<ColorSpan>();
             foreach (var (value, color) in parts)
             {
-                if (string.IsNullOrEmpty(value)) { continue; } 
+                if (string.IsNullOrEmpty(value)) { continue; }
                 var current = body.Length;
                 body.Append(value);
                 colors.Add(new ColorSpan(color, new Range(current, body.Length)));
@@ -23,7 +23,7 @@ namespace txte.Text
         }
 
         public ColoredString(Setting setting, string body)
-            : this (
+            : this(
                 setting,
                 body,
                 false,
@@ -42,10 +42,10 @@ namespace txte.Text
             Setting setting, string body,
             bool hasFlagmentedHead, Coloring colors, bool hasFlagmentedTail
         ) =>
-            (this.setting, this.body, this.colors, this.hasFragmentedHead, this.hasFragmentedTail) = 
+            (this.setting, this.body, this.colors, this.hasFragmentedHead, this.hasFragmentedTail) =
                 (setting, body, colors, hasFlagmentedHead, hasFlagmentedTail);
 
-        readonly Setting setting; 
+        readonly Setting setting;
         readonly string body;
         readonly bool hasFragmentedHead;
         readonly Coloring colors;
@@ -62,7 +62,7 @@ namespace txte.Text
 
 
             return new ColoredString(
-                this.setting, this.body, 
+                this.setting, this.body,
                 this.hasFragmentedHead, colors.Overlay(clipedOverlay), this.hasFragmentedTail);
         }
 
@@ -130,7 +130,7 @@ namespace txte.Text
             var start = this.colors[0].ValueRange.Begin;
             var end = this.colors[^1].ValueRange.End;
             int length = 0;
-            for (int i = start; i < end; i ++)
+            for (int i = start; i < end; i++)
             {
                 length += this.body[i].GetEastAsianWidth(ambiguousIsFullWidth);
             }
@@ -147,8 +147,9 @@ namespace txte.Text
         public Range ValueRange;
         public ColorSet Color;
 
-        public int CompareTo(ColorSpan other)
+        public int CompareTo(ColorSpan? other)
         {
+            if (other == null) { return 1; }
             if (this.ValueRange.Begin < other.ValueRange.Begin) { return -1; }
             if (other.ValueRange.Begin < this.ValueRange.Begin) { return 1; }
 

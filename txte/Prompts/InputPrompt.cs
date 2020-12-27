@@ -36,9 +36,9 @@ namespace txte.Prompts
 
                 default:
                     if (!char.IsControl(keyInfo.KeyChar))
-                    { 
+                    {
                         this.input.Append(keyInfo.KeyChar);
-                    return ModalRunning.Default;
+                        return ModalRunning.Default;
                     }
                     return ModalUnhandled.Default;
             }

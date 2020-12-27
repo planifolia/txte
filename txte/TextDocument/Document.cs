@@ -38,7 +38,8 @@ namespace txte.TextDocument
             using var reader = new StreamReader(path, Encoding.UTF8);
             var text = await reader.ReadToEndAsync();
             var newLine = AnyNewLinePattern.Match(text);
-            if (newLine.Success) {
+            if (newLine.Success)
+            {
                 doc.NewLineFormat = EndOfLineFormat.FromSequence(newLine.Value);
             }
             var lines = AnyNewLinePattern.Split(text);
@@ -147,7 +148,7 @@ namespace txte.TextDocument
                         isNewLine: true
                     )
                 );
-                this.Rows[this.ValuePosition.Y] = 
+                this.Rows[this.ValuePosition.Y] =
                     new Row(
                         this.setting,
                         this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
@@ -157,7 +158,7 @@ namespace txte.TextDocument
             this.MoveHome();
             this.MoveDown();
         }
-        
+
         public void BackSpace()
         {
             var position = this.valuePosition;
@@ -197,7 +198,7 @@ namespace txte.TextDocument
         public void DeleteChar()
         {
             if (this.IsNew) { return; }
-            if (this.valuePosition.Y == this.Rows.Count - 1 
+            if (this.valuePosition.Y == this.Rows.Count - 1
                 && this.valuePosition.X == this.Rows[^1].Value.Length)
             {
                 return;

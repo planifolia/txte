@@ -10,7 +10,7 @@ namespace txte.Settings
         public static readonly IReadOnlyList<EAWAmbiguousFormat> All =
             new EAWAmbiguousFormat[] { HalfWidth, FullWidth };
 
-        public static EAWAmbiguousFormat FromSetting(bool ambiguousIsFullWidth) => 
+        public static EAWAmbiguousFormat FromSetting(bool ambiguousIsFullWidth) =>
             ambiguousIsFullWidth ? EAWAmbiguousFormat.FullWidth : EAWAmbiguousFormat.HalfWidth;
 
         public string Name { get; }

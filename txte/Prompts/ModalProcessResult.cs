@@ -1,18 +1,19 @@
 namespace txte.State
 {
-    abstract class ModalProcessResult<T> { 
-        public static implicit operator ModalProcessResult<T> (ModalNeedsRefreash untyped)
+    abstract class ModalProcessResult<T>
+    {
+        public static implicit operator ModalProcessResult<T>(ModalNeedsRefreash untyped)
             => ModalNeedsRefreash<T>.Default;
-        public static implicit operator ModalProcessResult<T> (ModalRunning untyped)
+        public static implicit operator ModalProcessResult<T>(ModalRunning untyped)
             => ModalRunning<T>.Default;
-        public static implicit operator ModalProcessResult<T> (ModalCancel untyped)
+        public static implicit operator ModalProcessResult<T>(ModalCancel untyped)
             => ModalCancel<T>.Default;
-        public static implicit operator ModalProcessResult<T> (ModalUnhandled untyped)
+        public static implicit operator ModalProcessResult<T>(ModalUnhandled untyped)
             => ModalUnhandled<T>.Default;
     }
 
     interface IModalOk { }
-    class ModalOk<T>: ModalProcessResult<T>, IModalOk
+    class ModalOk<T> : ModalProcessResult<T>, IModalOk
     {
         public ModalOk(T result) => this.Result = result;
         public readonly T Result;
@@ -25,7 +26,7 @@ namespace txte.State
     }
 
     interface IModalNeedsRefreash { }
-    class ModalNeedsRefreash<T>: ModalProcessResult<T>, IModalNeedsRefreash
+    class ModalNeedsRefreash<T> : ModalProcessResult<T>, IModalNeedsRefreash
     {
         public static ModalNeedsRefreash<T> Default = new ModalNeedsRefreash<T>();
     }
@@ -35,7 +36,7 @@ namespace txte.State
     }
 
     interface IModalRunning { }
-    class ModalRunning<T>: ModalProcessResult<T>, IModalRunning
+    class ModalRunning<T> : ModalProcessResult<T>, IModalRunning
     {
         public static ModalRunning<T> Default = new ModalRunning<T>();
     }
@@ -45,7 +46,7 @@ namespace txte.State
     }
 
     interface IModalCancel { }
-    class ModalCancel<T>: ModalProcessResult<T>, IModalCancel
+    class ModalCancel<T> : ModalProcessResult<T>, IModalCancel
     {
         public static ModalCancel<T> Default = new ModalCancel<T>();
     }
@@ -53,9 +54,9 @@ namespace txte.State
     {
         public static ModalCancel Default = new ModalCancel();
     }
-    
+
     interface IModalUnhandled { }
-    class ModalUnhandled<T>: ModalProcessResult<T>, IModalUnhandled
+    class ModalUnhandled<T> : ModalProcessResult<T>, IModalUnhandled
     {
         public static ModalUnhandled<T> Default = new ModalUnhandled<T>();
     }
