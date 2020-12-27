@@ -1,5 +1,5 @@
 using System;
-using System.Threading;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace txte.ConsoleInterface
@@ -7,61 +7,29 @@ namespace txte.ConsoleInterface
 
     class CoreConsoleKeyReader : IDisposable
     {
-        public CoreConsoleKeyReader()
+        public CoreConsoleKeyReader(int timeoutMillisec)
         {
-            this.eventQueue = new EventQueue();
-            this.cancellationController = new CancellationTokenSource();
-            this.StartListen();
+            this.timeoutMillisec = timeoutMillisec;
+            this.isAlive = true;
         }
 
-        readonly EventQueue eventQueue;
-        readonly CancellationTokenSource cancellationController;
+        readonly int timeoutMillisec;
+        bool isAlive;
 
-        public async Task<InputEventArgs> ReadKeyOrTimeoutAsync() =>
-            await this.eventQueue.RecieveReadKeyEventAsync();
-
-        void StartListen()
+        public async IAsyncEnumerable<InputEventArgs> ReadKeysOrTimeoutAsync()
         {
-            var userInput = GenerateEventAsync(
-                EventType.UserAction,
-                this.ReadKeyAsync,
-                this.cancellationController.Token
-            );
-            var timeout = GenerateEventAsync(
-                EventType.Timeout,
-                this.TimeOutAsync,
-                this.cancellationController.Token
-            );
-        }
-
-        async Task<ConsoleKeyInfo> TimeOutAsync()
-        {
-            await Task.Delay(1000);
-            return default;
-        }
-        async Task<ConsoleKeyInfo> ReadKeyAsync()
-        {
-            await Task.Yield();
-            return Console.ReadKey(true);
-        }
-
-        async Task GenerateEventAsync(
-            EventType eventType,
-            Func<Task<ConsoleKeyInfo>> inputGenerator,
-            CancellationToken cancellationToken
-        )
-        {
-            while (!cancellationToken.IsCancellationRequested)
+            while (this.isAlive)
             {
-                var keyInfo = await inputGenerator();
-                if (cancellationToken.IsCancellationRequested) { return; }
-                this.eventQueue.PostEvent(new InputEventArgs(eventType, keyInfo));
+                var timeout = DateTime.Now + TimeSpan.FromMilliseconds(timeoutMillisec);
+                while (true)
+                {
+                    if (Console.KeyAvailable) { yield return new InputEventArgs(EventType.UserAction, Console.ReadKey(true)); }
+                    if (DateTime.Now >= timeout) { break; }
+                    await Task.Delay(10);
+                }
+                yield return new InputEventArgs(EventType.Timeout, default);
             }
-        }
-
-        void StopListen()
-        {
-            this.cancellationController.Cancel();
+            yield break;
         }
 
         #region IDisposable Support
@@ -71,12 +39,9 @@ namespace txte.ConsoleInterface
         {
             if (!this.disposedValue)
             {
-                if (disposing)
-                {
-                    this.StopListen();
-                }
+                if (disposing) { }
 
-                this.cancellationController.Dispose();
+                this.isAlive = false;
 
                 this.disposedValue = true;
             }

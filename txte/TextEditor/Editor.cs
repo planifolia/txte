@@ -52,9 +52,8 @@ namespace txte.TextEditor
         public async Task RunAsync()
         {
             this.RefreshScreen(0);
-            while (true)
+            await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
             {
-                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 {
                     this.FadeMessage();
@@ -67,7 +66,7 @@ namespace txte.TextEditor
                     default:
                         break;
                 }
-                if (Console.KeyAvailable)
+                if (this.console.KeyAvailable)
                 {
                     continue; //skip if muitiple chars are imput by IME, etc.
                 }
@@ -336,9 +335,8 @@ namespace txte.TextEditor
             using var _ = this.prompt.SetTemporary(prompt);
 
             this.RefreshScreen(0);
-            while (true)
+            await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
             {
-                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 {
                     this.FadeMessage();
@@ -360,6 +358,9 @@ namespace txte.TextEditor
                     this.RefreshScreen(this.editArea.Height);
                 }
             }
+
+            // Maybe Console is dead.
+            return ModalCancel.Default;
         }
 
 
@@ -377,9 +378,8 @@ namespace txte.TextEditor
 
             this.RefreshScreen(0);
 
-            while (true)
+            await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
             {
-                (var eventType, var keyInfo) = await this.console.ReadKeyOrTimeoutAsync();
                 if (eventType == EventType.Timeout)
                 {
                     this.FadeMessage();
@@ -396,6 +396,9 @@ namespace txte.TextEditor
 
                 this.RefreshScreen(0);
             }
+
+            // Maybe Console is dead.
+            return ProcessResult.Quit;
         }
 
         async Task<ProcessResult> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)

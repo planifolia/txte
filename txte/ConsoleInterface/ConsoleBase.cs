@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Threading.Tasks;
 using txte.Settings;
 using txte.Text;
 
@@ -10,7 +9,7 @@ namespace txte.ConsoleInterface
     interface IConsoleInput
     {
         bool KeyAvailable { get; }
-        Task<InputEventArgs> ReadKeyOrTimeoutAsync();
+        IAsyncEnumerable<InputEventArgs> ReadKeysOrTimeoutAsync();
     }
 
     interface IConsoleOutput

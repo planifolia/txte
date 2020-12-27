@@ -18,9 +18,7 @@ namespace txte
             var arguments = args.Except(options).ToArray();
             try
             {
-                using var console =
-                    (options.Contains("-e")) ? (IConsole)new ConsoleWithEscapeSequence()
-                    : new CoreConsole();
+                using var console = new CoreConsole(timeoutMillisec: 1000);
 
                 var setting = new Setting();
                 var document =

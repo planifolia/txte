@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Threading.Tasks;
 using txte.Settings;
 using txte.Text;
 
@@ -10,16 +9,16 @@ namespace txte.ConsoleInterface
     class CoreConsole : IConsole
     {
 
-        public CoreConsole()
+        public CoreConsole(int timeoutMillisec)
         {
             this.CheckConsoleRequirements();
             this.SetupConsoleMode();
             this.InitializeColorSettings();
-            this.keyReader = new CoreConsoleKeyReader();
+            this.keyReader = new CoreConsoleKeyReader(timeoutMillisec);
         }
 
         public int Height => Console.WindowHeight;
-        public int Width => Console.BufferWidth - 1;
+        public int Width => Console.BufferWidth;
         public Size Size => new Size(this.Width, this.Height);
 
         public bool KeyAvailable => Console.KeyAvailable;
@@ -52,8 +51,8 @@ namespace txte.ConsoleInterface
         OriginatedColor _backgroundColor;
 
 
-        public async Task<InputEventArgs> ReadKeyOrTimeoutAsync()
-            => await this.keyReader.ReadKeyOrTimeoutAsync();
+        public IAsyncEnumerable<InputEventArgs> ReadKeysOrTimeoutAsync()
+            => this.keyReader.ReadKeysOrTimeoutAsync();
 
         public void RefreshScreen(
             int from,
