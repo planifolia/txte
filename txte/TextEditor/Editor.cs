@@ -12,13 +12,17 @@ using txte.Text;
 using txte.ConsoleInterface;
 using txte.TextDocument;
 using txte.Prompts;
-using System.Collections.Immutable;
+using System.Reflection;
 
 namespace txte.TextEditor
 {
     class Editor
     {
-        public static string Version = "0.0.1";
+        public static string Version = 
+            Assembly.GetEntryAssembly()!
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
+            .InformationalVersion
+            .ToString();
 
 
         public Editor(IConsole console, Setting setting, Document document, Message firstMessage)
