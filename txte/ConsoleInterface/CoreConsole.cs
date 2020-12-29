@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using txte.Settings;
 using txte.Text;
 
@@ -12,6 +13,7 @@ namespace txte.ConsoleInterface
         public CoreConsole(int timeoutMillisec)
         {
             this.CheckConsoleRequirements();
+            this.CheckSpec();
             this.SetupConsoleMode();
             this.InitializeColorSettings();
             this.keyReader = new CoreConsoleKeyReader(timeoutMillisec);
@@ -20,6 +22,8 @@ namespace txte.ConsoleInterface
         public int Height => Console.WindowHeight;
         public int Width => Console.BufferWidth;
         public Size Size => new Size(this.Width, this.Height);
+
+        public bool ShowsAmbiguousCharAsFullWidth { get; private set; }
 
         public bool KeyAvailable => Console.KeyAvailable;
 
@@ -57,14 +61,14 @@ namespace txte.ConsoleInterface
         public void RefreshScreen(
             int from,
             Setting setting,
-            Action<IScreen, int> RenderScreen,
+            Action<IScreen, int> renderScreen,
             Point cursor)
         {
-            var screen = new Screen(this, from, setting.IsFullWidthAmbiguous);
+            var screen = new Screen(this, from, setting.AmbiguousCharIsFullWidth);
 
             Console.CursorVisible = false;
             Console.SetCursorPosition(0, from);
-            RenderScreen(screen, from);
+            renderScreen(screen, from);
             Console.SetCursorPosition(cursor.X, cursor.Y);
             Console.CursorVisible = true;
         }
@@ -83,6 +87,26 @@ namespace txte.ConsoleInterface
         {
             if (Console.IsInputRedirected) { throw new EditorException("Console input is redirected."); }
             if (Console.IsOutputRedirected) { throw new EditorException("Console output is redirected."); }
+        }
+
+        void CheckSpec()
+        {
+            this.ShowsAmbiguousCharAsFullWidth = this.EstimateAmbiguousCharWidth() == 2;
+        }
+
+        int EstimateAmbiguousCharWidth()
+        {
+            var testChars = new [] {'Å', 'α', 'Я', '○'};
+            return
+                testChars.Select(x =>
+                {
+                    var start = Console.CursorLeft;
+                    Console.Write(x);
+                    var count = Console.CursorLeft - start;
+                    Console.Write(new string('\b', count));
+                    return count;
+                })
+                .Max();
         }
 
         void SetupConsoleMode()

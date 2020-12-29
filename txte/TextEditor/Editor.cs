@@ -189,7 +189,7 @@ namespace txte.TextEditor
 
         void DrawEditorRows(IScreen screen, int from)
         {
-            bool ambiguousSetting = this.setting.IsFullWidthAmbiguous;
+            bool ambiguousSetting = this.setting.AmbiguousCharIsFullWidth;
             for (int y = from; y < this.editArea.Height; y++)
             {
                 var docRow = y + this.document.Offset.Y;
@@ -309,7 +309,7 @@ namespace txte.TextEditor
             var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
             var fileNameLength = fileName.Length.AtMax(20);
             (var clippedFileName, _, _) =
-                fileName.SubRenderString(0, fileNameLength, this.setting.IsFullWidthAmbiguous);
+                fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
@@ -563,22 +563,35 @@ namespace txte.TextEditor
         {
             using var message =
                     new TemporaryMessage(ColoredString.Concat(this.setting,
-                        ("hint: Set according to your terminal font. Usually Half-Width", ColorSet.OutOfBounds)));
+                        ("hint: Set according to your terminal font. Default is estimated from your terminal", ColorSet.OutOfBounds)));
             this.message = message;
             var modalResult =
                 await this.Prompt(
                     ChoosePrompt.Create(
                         "Change East Asian Width - Ambiguous:",
                         EAWAmbiguousFormat.All,
-                        EAWAmbiguousFormat.FromSetting(this.setting.IsFullWidthAmbiguous)
+                        this.setting.AmbiguousFormat
                     )
                 );
             if (modalResult is ModalOk<EAWAmbiguousFormat>(var selection))
             {
-                this.setting.IsFullWidthAmbiguous = selection.IsFullWidthAmbiguous;
-                this.message =
-                    new Message(ColoredString.Concat(this.setting,
-                        ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
+                this.setting.SetAmbiguousCharWidthFormat(this.console, selection);
+                if (selection.IsFullWidth.HasValue)
+                {
+                    this.message =
+                        new Message(ColoredString.Concat(this.setting,
+                            ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
+                }
+                else
+                {
+                    this.message =
+                        new Message(ColoredString.Concat(this.setting,
+                            (
+                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})", 
+                                ColorSet.OutOfBounds
+                            )
+                        ));
+                }
             }
 
             return ProcessResult.Running;

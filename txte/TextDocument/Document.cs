@@ -355,7 +355,7 @@ namespace txte.TextDocument
                 {
                     overshoot =
                         this.Rows[this.valuePosition.Y].Value[this.valuePosition.X]
-                        .GetEastAsianWidth(this.setting.IsFullWidthAmbiguous) - 1;
+                        .GetEastAsianWidth(this.setting.AmbiguousCharIsFullWidth) - 1;
                 }
             }
 

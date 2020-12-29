@@ -76,7 +76,7 @@ namespace txte.TextDocument
         {
             this.boundaries = new int[source.Length + 1];
             var tabSize = this.setting.TabSize;
-            var ambiguousSetting = this.setting.IsFullWidthAmbiguous;
+            var ambiguousSetting = this.setting.AmbiguousCharIsFullWidth;
             var figureBuilder = new StringBuilder();
             int figurePosition = 0;
             for (int iSource = 0; iSource < source.Length; iSource++)

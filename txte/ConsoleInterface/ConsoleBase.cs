@@ -17,6 +17,7 @@ namespace txte.ConsoleInterface
         int Height { get; }
         int Width { get; }
         Size Size { get; }
+        bool ShowsAmbiguousCharAsFullWidth { get; }
         void RefreshScreen(
             int from,
             Setting setting,

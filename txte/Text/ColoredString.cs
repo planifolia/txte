@@ -86,7 +86,7 @@ namespace txte.Text
                 return this;
             }
             using var colorSource = this.colors.GetEnumerator();
-            bool ambiguousIsFullWidth = this.setting.IsFullWidthAmbiguous;
+            bool ambiguousIsFullWidth = this.setting.AmbiguousCharIsFullWidth;
             int renderPos = 0;
             int rangeBegin = this.colors[0].ValueRange.Begin;
             int rangeEnd = this.colors[0].ValueRange.End;
@@ -126,7 +126,7 @@ namespace txte.Text
         {
             if (this.colors.Count == 0) { return 0; }
 
-            var ambiguousIsFullWidth = this.setting.IsFullWidthAmbiguous;
+            var ambiguousIsFullWidth = this.setting.AmbiguousCharIsFullWidth;
             var start = this.colors[0].ValueRange.Begin;
             var end = this.colors[^1].ValueRange.End;
             int length = 0;
