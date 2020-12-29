@@ -23,7 +23,7 @@ namespace txte.TextDocument
     interface ITextFinder
     {
         string Current { get; }
-        Coloring Highlight(Row row);
+        Coloring Highlight(int rowIndex, Row row);
     }
 
     class Document : IDocument
@@ -86,7 +86,7 @@ namespace txte.TextDocument
             ColoredString render;
             if (this.Finding.HasValue && this.Finding.Value.Current.Length != 0)
             {
-                var founds = this.Finding.Value.Highlight(this.Rows[docRow]);
+                var founds = this.Finding.Value.Highlight(docRow, this.Rows[docRow]);
                 render = renderBase.Overlay(founds);
             }
             else

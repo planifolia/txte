@@ -48,6 +48,8 @@ namespace txte.Text
             new ColorSet(ConsoleColor.Blue, ThemeColor.Foreground);
 
         public static readonly ColorSet Found =
+            new ColorSet(ConsoleColor.Black, ConsoleColor.Gray);
+        public static readonly ColorSet CurrentFound =
             new ColorSet(ConsoleColor.Black, ConsoleColor.Yellow);
 
         public static readonly ColorSet OutOfBounds =

@@ -14,6 +14,10 @@ namespace txte.Prompts
 
     class TextFinder : ITextFinder
     {
+        const int NOT_FOUND = -1;
+        const int FORWARD = 1;
+        const int BACKWORD = -1;
+
         public TextFinder(IDocument document)
         {
 
@@ -22,68 +26,105 @@ namespace txte.Prompts
             this.savedOffset = this.document.Offset;
 
             this.Current = "";
-            this.direction = 1;
-            this.lastMatch = -1;
+            this.CurrentMatch = new Point(NOT_FOUND, NOT_FOUND);
         }
         public string Current { get; private set; }
+        public Point CurrentMatch { get; private set; }
 
         readonly IDocument document;
         readonly Point savedPosition;
         readonly Point savedOffset;
 
-        int lastMatch;
-        int direction;
-
         public void FindFirst(string query)
         {
             this.Current = query;
-            this.direction = 1;
-            this.lastMatch = -1;
-            this.Find();
+            this.CurrentMatch = this.FindPosition(query, FORWARD, new Point(NOT_FOUND, NOT_FOUND));
         }
 
-        public void FindNext(string query)
+        public void FindNext()
         {
-            this.Current = query;
-            this.direction = 1;
-            this.Find();
+            this.CurrentMatch = this.FindPosition(this.Current, FORWARD, this.CurrentMatch);
         }
-        public void FindPrevious(string query)
+        public void FindPrevious()
         {
-            this.Current = query;
-            this.direction = -1;
-            this.Find();
+            this.CurrentMatch = this.FindPosition(this.Current, BACKWORD, this.CurrentMatch);
         }
 
-        public void Find()
+        Point FindPosition(string query, int direction, Point lastMatch)
         {
-            // find first word when beginning finding or losing pattern
-            if (this.lastMatch == -1) { this.direction = 1; }
+            int findingRow = lastMatch.Y;
+            int findingCol = lastMatch.X;
+            // for round trip to the rest part of the same line
+            int rowArround = this.document.Rows.Count + 1;
 
-            int findingRow = this.lastMatch;
-            for (int i = 0; i < this.document.Rows.Count; i++)
+            for (int i = 0; i < rowArround + 1; i++)
             {
-                findingRow += this.direction;
-                // wrap arround at start / end of file
-                if (findingRow == -1)
+                if (findingCol == NOT_FOUND)
                 {
-                    findingRow = this.document.Rows.Count - 1;
-                }
-                else if (findingRow == this.document.Rows.Count)
-                {
-                    findingRow = 0;
-                }
+                    findingRow += direction;
 
-                var index = this.document.Rows[findingRow].Value.IndexOf(this.Current);
-                if (index >= 0)
+                    // wrap arround at the start / end of file
+                    if (findingRow == -1)
+                    {
+                        findingRow = this.document.Rows.Count - 1;
+                    }
+                    else if (findingRow == this.document.Rows.Count)
+                    {
+                        findingRow = 0;
+                    }
+
+                    if (direction == FORWARD)
+                    {
+                        findingCol = 0;
+                    }
+                    else
+                    {
+                        findingCol = this.document.Rows[findingRow].Value.Length - 1;
+                    }
+                }
+                else
                 {
-                    this.lastMatch = findingRow;
-                    this.document.ValuePosition = new Point(index, findingRow);
-                    // to scroll up found word to top of screen
-                    this.document.Offset = new Point(this.document.Offset.X, this.document.Rows.Count);
-                    break;
+                    findingCol += direction;
+
+                    // move from the start / end of line to next line
+                    if (findingCol == -1 || findingCol == this.document.Rows[findingRow].Value.Length)
+                    {
+                        findingRow += direction;
+
+                        // wrap arround at the start / end of file
+                        if (findingRow == -1)
+                        {
+                            findingRow = this.document.Rows.Count - 1;
+                        }
+                        else if (findingRow == this.document.Rows.Count)
+                        {
+                            findingRow = 0;
+                        }
+
+                        if (direction == FORWARD)
+                        {
+                            findingCol = 0;
+                        }
+                        else
+                        {
+                            findingCol = this.document.Rows[findingRow].Value.Length - 1;
+                        }
+                    }
+                }
+                if (this.document.Rows[findingRow].Value.Length == 0) {
+                    findingCol = NOT_FOUND;
+                    continue;
+                }
+                findingCol =
+                    direction == 1 ? this.document.Rows[findingRow].Value.IndexOf(query, findingCol)
+                    : this.document.Rows[findingRow].Value.LastIndexOf(query, findingCol);
+                if (findingCol != NOT_FOUND)
+                {
+                    this.document.ValuePosition = new Point(findingCol, findingRow);
+                    return new Point(findingCol, findingRow);
                 }
             }
+            return lastMatch;
         }
 
         public void RestorePosition()
@@ -93,7 +134,7 @@ namespace txte.Prompts
             this.document.Offset = this.savedOffset;
         }
 
-        public Coloring Highlight(Row row)
+        public Coloring Highlight(int rowIndex, Row row)
         {
             var indices = row.Value.Indices(this.Current);
             var founds =
@@ -103,7 +144,7 @@ namespace txte.Prompts
                     {
                         var boundaries = row.Boundaries;
                         return new ColorSpan(
-                            ColorSet.Found,
+                            ((this.CurrentMatch.X == x && this.CurrentMatch.Y == rowIndex) ? ColorSet.CurrentFound : ColorSet.Found),
                             new Range(boundaries[x], boundaries[x + this.Current.Length])
                         );
                     }
@@ -132,12 +173,12 @@ namespace txte.Prompts
             {
                 // Search Forward
                 case { Key: ConsoleKey.Tab, Modifiers: (ConsoleModifiers)0 }:
-                    this.finder.FindNext(this.prompt.Current);
+                    this.finder.FindNext();
                     return ModalNeedsRefreash.Default;
 
                 // Search Backward
                 case { Key: ConsoleKey.Tab, Modifiers: ConsoleModifiers.Shift }:
-                    this.finder.FindPrevious(this.prompt.Current);
+                    this.finder.FindPrevious();
                     return ModalNeedsRefreash.Default;
 
                 default:
