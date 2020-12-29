@@ -20,8 +20,10 @@ namespace txte.ConsoleInterface
         }
 
         public int Height => Console.WindowHeight;
-        public int Width => Console.BufferWidth;
+        public int Width => Console.BufferWidth - this.RightMargin;
         public Size Size => new Size(this.Width, this.Height);
+
+        public int RightMargin { get; private set; }
 
         public bool ShowsAmbiguousCharAsFullWidth { get; private set; }
 
@@ -92,6 +94,7 @@ namespace txte.ConsoleInterface
         void CheckSpec()
         {
             this.ShowsAmbiguousCharAsFullWidth = this.EstimateAmbiguousCharWidth() == 2;
+            this.RightMargin = this.EstimateRightMargin();
         }
 
         int EstimateAmbiguousCharWidth()
@@ -107,6 +110,16 @@ namespace txte.ConsoleInterface
                     return count;
                 })
                 .Max();
+        }
+
+        int EstimateRightMargin()
+        {
+            var standard = Console.BufferWidth;
+            Console.Write(new string(' ', standard));
+            var writed = Console.CursorLeft;
+            Console.Write(new string('\b', standard));
+            var margin = (writed + 1) % standard;
+            return margin;
         }
 
         void SetupConsoleMode()
