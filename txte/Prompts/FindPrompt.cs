@@ -52,6 +52,7 @@ namespace txte.Prompts
 
         Point FindPosition(string query, int direction, Point lastMatch)
         {
+            int queryLength = query.Length;
             int findingRow = lastMatch.Y;
             int findingCol = lastMatch.X;
             // for round trip to the rest part of the same line
@@ -84,7 +85,7 @@ namespace txte.Prompts
                 }
                 else
                 {
-                    findingCol += direction;
+                    findingCol += (direction == FORWARD) ? queryLength : -1;
 
                     // move from the start / end of line to next line
                     if (findingCol == -1 || findingCol == this.document.Rows[findingRow].Value.Length)
@@ -115,9 +116,18 @@ namespace txte.Prompts
                     findingCol = NOT_FOUND;
                     continue;
                 }
-                findingCol =
-                    direction == 1 ? this.document.Rows[findingRow].Value.IndexOf(query, findingCol)
-                    : this.document.Rows[findingRow].Value.LastIndexOf(query, findingCol);
+                if (direction == FORWARD)
+                {
+                    findingCol = this.document.Rows[findingRow].Value.IndexOf(query, findingCol);
+                }
+                else
+                {
+                    findingCol = 
+                        this.document.Rows[findingRow].Value
+                        .IndicesOf(query, allowOverlap: false)
+                        .Where(x => x <= findingCol)
+                        .DefaultIfEmpty(-1).Max();
+                }
                 if (findingCol != NOT_FOUND)
                 {
                     this.document.ValuePosition = new Point(findingCol, findingRow);
@@ -136,7 +146,7 @@ namespace txte.Prompts
 
         public Coloring Highlight(int rowIndex, Row row)
         {
-            var indices = row.Value.Indices(this.Current);
+            var indices = row.Value.IndicesOf(this.Current, allowOverlap: false);
             var founds =
                 indices
                 .Select(

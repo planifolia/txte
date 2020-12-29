@@ -1,20 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace txte
 {
     static class StringExtensions
     {
-        public static IEnumerable<int> Indices(this string @this, string value)
+        public static IEnumerable<int> IndicesOf(this string @this, string value, bool allowOverlap)
         {
-            if (@this.Length == 0) { yield break; }
-            int lastIndex = -1;
-            while (@this.IndexOf(value, lastIndex + 1) is var found && found != -1)
+            var thisLength = @this.Length;
+            if (thisLength == 0) { yield break; }
+            var step = (allowOverlap) ? 1 : value.Length;
+            int startIndex = 0;
+            while (@this.IndexOf(value, startIndex) is var found && found != -1)
             {
-                lastIndex = found;
+                startIndex = found + step;
                 yield return found;
-                if (found == @this.Length - 1) { yield break; }
+                if (startIndex == thisLength) { yield break; }
             }
         }
     }
