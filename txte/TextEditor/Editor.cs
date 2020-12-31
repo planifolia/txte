@@ -314,7 +314,7 @@ namespace txte.TextEditor
         }
         void DrawMessageBar(IScreen screen)
         {
-            if (!this.message.IsValid) { return; }
+            if (!this.message.IsValid) return;
 
             var text = this.message.Value;
             var textLength = text.GetRenderLength();
@@ -529,11 +529,12 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var finder = new TextFinder(this.document);
-            using var _ = this.document.Finding.SetTemporary(finder);
-            var findPrompt = new FindPrompt("Search:", finder);
+            var prompt = new FindPrompt("Search:");
+            using var finder = new TextFinder(prompt, this.document);
+            using var highlighter = new FindingHilighter(finder);
+            using var _ = this.document.OverlapHilighter.SetTemporary(highlighter);
 
-            await this.Prompt(findPrompt);
+            await this.Prompt(prompt);
 
             return ProcessResult.Running;
         }
