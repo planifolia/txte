@@ -7,7 +7,7 @@ namespace txte.Input
         public KeyCombination(ConsoleKey key, bool shifted, bool controled)
         : this(key, shifted, controled, false) { }
 
-        public KeyCombination(ConsoleKey key, bool shifted, bool alted, bool controled)
+        public KeyCombination(ConsoleKey key, bool shifted, bool controled, bool alted)
         {
             this.Key = key;
             this.Shifted = shifted;
