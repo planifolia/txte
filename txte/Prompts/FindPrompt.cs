@@ -41,14 +41,10 @@ namespace txte.Prompts
             this.CurrentMatch = this.FindPosition(query, FORWARD, new Point(NOT_FOUND, NOT_FOUND));
         }
 
-        public void FindNext()
-        {
+        public void FindNext() =>
             this.CurrentMatch = this.FindPosition(this.Current, FORWARD, this.CurrentMatch);
-        }
-        public void FindPrevious()
-        {
+        public void FindPrevious() =>
             this.CurrentMatch = this.FindPosition(this.Current, BACKWORD, this.CurrentMatch);
-        }
 
         Point FindPosition(string query, int direction, Point lastMatch)
         {
@@ -112,7 +108,8 @@ namespace txte.Prompts
                         }
                     }
                 }
-                if (this.document.Rows[findingRow].Value.Length == 0) {
+                if (this.document.Rows[findingRow].Value.Length == 0)
+                {
                     findingCol = NOT_FOUND;
                     continue;
                 }
@@ -122,7 +119,7 @@ namespace txte.Prompts
                 }
                 else
                 {
-                    findingCol = 
+                    findingCol =
                         this.document.Rows[findingRow].Value
                         .IndicesOf(query, allowOverlap: false)
                         .Where(x => x <= findingCol)
@@ -149,16 +146,14 @@ namespace txte.Prompts
             var indices = row.Value.IndicesOf(this.Current, allowOverlap: false);
             var founds =
                 indices
-                .Select(
-                    x =>
-                    {
-                        var boundaries = row.Boundaries;
-                        return new ColorSpan(
-                            ((this.CurrentMatch.X == x && this.CurrentMatch.Y == rowIndex) ? ColorSet.CurrentFound : ColorSet.Found),
-                            new Range(boundaries[x], boundaries[x + this.Current.Length])
-                        );
-                    }
-                )
+                .Select(x =>
+                {
+                    var boundaries = row.Boundaries;
+                    return new ColorSpan(
+                        ((this.CurrentMatch.X == x && this.CurrentMatch.Y == rowIndex) ? ColorSet.CurrentFound : ColorSet.Found),
+                        new Range(boundaries[x], boundaries[x + this.Current.Length])
+                    );
+                })
                 .ToList();
             return new Coloring(founds);
         }

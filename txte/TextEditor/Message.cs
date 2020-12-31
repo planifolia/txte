@@ -18,10 +18,7 @@ namespace txte.TextEditor
         public bool IsValid { get; private set; }
         readonly DateTime createdTime;
 
-        public void Expire()
-        {
-            this.IsValid = false;
-        }
+        public void Expire() => this.IsValid = false;
 
         public void CheckExpiration(DateTime now)
         {
@@ -51,10 +48,7 @@ namespace txte.TextEditor
                 disposedValue = true;
             }
         }
-        public void Dispose()
-        {
-            Dispose(true);
-        }
+        public void Dispose() => Dispose(true);
         #endregion
 
     }

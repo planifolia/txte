@@ -4,10 +4,7 @@ namespace txte
 {
     class Temporary<T>
     {
-        public Temporary()
-        {
-            this.value = default!;
-        }
+        public Temporary() => this.value = default!;
 
         public bool HasValue { get; private set; }
         public T Value => this.HasValue ? this.value : throw new InvalidOperationException();
@@ -23,10 +20,7 @@ namespace txte
 
         public struct DisposingToken : IDisposable
         {
-            public DisposingToken(Temporary<T> source)
-            {
-                this.source = source;
-            }
+            public DisposingToken(Temporary<T> source) => this.source = source;
 
             readonly Temporary<T> source;
 
@@ -40,10 +34,7 @@ namespace txte
 
     class RestorableValue<T> where T : struct
     {
-        public RestorableValue()
-        {
-            this.Value = default!;
-        }
+        public RestorableValue() => this.Value = default!;
 
         public T Value { get; set; }
 
@@ -60,15 +51,9 @@ namespace txte
             readonly RestorableValue<T> source;
             readonly T savedValue;
 
-            public void Restore()
-            {
-                this.source.Value = this.savedValue;
-            }
+            public void Restore() => this.source.Value = this.savedValue;
 
-            void IDisposable.Dispose()
-            {
-                this.Restore();
-            }
+            void IDisposable.Dispose() => this.Restore();
         }
     }
 }

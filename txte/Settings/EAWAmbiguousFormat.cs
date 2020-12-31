@@ -4,9 +4,12 @@ namespace txte.Settings
 {
     class EAWAmbiguousFormat : IChoice
     {
-        public static readonly EAWAmbiguousFormat Default = new EAWAmbiguousFormat("Default", null, 'd');
-        public static readonly EAWAmbiguousFormat HalfWidth = new EAWAmbiguousFormat("Half-Width", false, 'h');
-        public static readonly EAWAmbiguousFormat FullWidth = new EAWAmbiguousFormat("Full-Width", true, 'f');
+        public static readonly EAWAmbiguousFormat Default = 
+            new EAWAmbiguousFormat("Default", null, 'd');
+        public static readonly EAWAmbiguousFormat HalfWidth = 
+            new EAWAmbiguousFormat("Half-Width", false, 'h');
+        public static readonly EAWAmbiguousFormat FullWidth = 
+            new EAWAmbiguousFormat("Full-Width", true, 'f');
 
         public static readonly IReadOnlyList<EAWAmbiguousFormat> All =
             new EAWAmbiguousFormat[] { Default, HalfWidth, FullWidth };

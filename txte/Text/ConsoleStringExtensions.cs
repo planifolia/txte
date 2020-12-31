@@ -12,26 +12,17 @@
             return length;
         }
 
-        public static int GetEastAsianWidth(this char value, bool ambiguousIsFullWidth)
-        {
-
-            switch (value.GetEastAsianWidthType())
+        public static int GetEastAsianWidth(this char value, bool ambiguousIsFullWidth) => 
+            value.GetEastAsianWidthType() switch
             {
-                case EastAsianWidthTypes.A:
-                    return ambiguousIsFullWidth ? 2 : 1;
-                case EastAsianWidthTypes.F:
-                case EastAsianWidthTypes.W:
-                    return 2;
-                case EastAsianWidthTypes.N:
-                case EastAsianWidthTypes.H:
-                case EastAsianWidthTypes.Na:
-                default:
-                    return 1;
-            }
-        }
+                EastAsianWidthTypes.A => ambiguousIsFullWidth ? 2 : 1,
+                EastAsianWidthTypes.F or EastAsianWidthTypes.W => 2,
+                EastAsianWidthTypes.N or EastAsianWidthTypes.H or EastAsianWidthTypes.Na or _ => 1,
+            };
 
         public static (string value, bool hasFragmentedStart, bool hasFragmentedEnd) SubRenderString(
-            this string value, int start, int length, bool ambiguousIsFullWidth)
+            this string value, int start, int length, bool ambiguousIsFullWidth
+        )
         {
             int consolePos = 0;
             int valuePos = 0;
@@ -41,6 +32,7 @@
                 consolePos += value[valuePos].GetEastAsianWidth(ambiguousIsFullWidth);
                 valuePos++;
             }
+
             var startIsFragmented = start < consolePos;
             var valueStart = valuePos;
             if (value.Length <= valueStart)
@@ -53,6 +45,7 @@
                 consolePos += value[valuePos].GetEastAsianWidth(ambiguousIsFullWidth);
                 valuePos++;
             }
+
             var endIsFragmented = start + length < consolePos;
             var valueEnd = valuePos - (endIsFragmented ? 1 : 0);
             return (value.Substring(valueStart, valueEnd - valueStart), startIsFragmented, endIsFragmented);

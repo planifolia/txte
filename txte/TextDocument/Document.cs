@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -37,11 +36,13 @@ namespace txte.TextDocument
 
             using var reader = new StreamReader(path, Encoding.UTF8);
             var text = await reader.ReadToEndAsync();
+
             var newLine = AnyNewLinePattern.Match(text);
             if (newLine.Success)
             {
                 doc.NewLineFormat = EndOfLineFormat.FromSequence(newLine.Value);
             }
+
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
             {
@@ -110,7 +111,8 @@ namespace txte.TextDocument
 
         public void Save()
         {
-            if (this.Path == null) { return; }
+            if (this.Path == null) return;
+
             using var file = new StreamWriter(this.Path, false, Encoding.UTF8);
             int rowCount = 0;
             foreach (var row in this.Rows)

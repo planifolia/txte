@@ -104,7 +104,7 @@ namespace txte.Prompts
         {
             foreach (var choice in this.choices)
             {
-                if (choice.Shortcut == keyChar) { return choice; }
+                if (choice.Shortcut == keyChar) return choice;
             }
 
             return null;

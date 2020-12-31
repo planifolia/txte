@@ -47,7 +47,10 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.source.IsUpdated) { this.Update(); }
+                if (this.source.IsUpdated)
+                {
+                    this.Update();
+                }
                 return this.value;
             }
         }
@@ -56,7 +59,10 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.source.IsUpdated) { this.Update(); }
+                if (this.source.IsUpdated)
+                {
+                    this.Update();
+                }
                 return this.boundaries;
             }
         }

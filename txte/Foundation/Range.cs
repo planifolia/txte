@@ -5,8 +5,11 @@ namespace txte
 {
     readonly struct Range : IComparable<Range>
     {
-        public Range(int begin, int end) =>
-            (this.Begin, this.End) = (begin, end);
+        public Range(int begin, int end)
+        {
+            this.Begin = begin;
+            this.End = end;
+        }
 
         readonly public int Begin;
         readonly public int End;

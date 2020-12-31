@@ -18,7 +18,7 @@ namespace txte.TextEditor
 {
     class Editor
     {
-        public static string Version = 
+        public static string Version =
             Assembly.GetEntryAssembly()!
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
             .InformationalVersion
@@ -149,14 +149,10 @@ namespace txte.TextEditor
 
         async Task OpenDocumentAsync(string path)
         {
-            if (this.document.IsNew)
-            {
-                this.document = await Document.OpenAsync(path, this.setting);
-            }
-            else
-            {
-                throw new NotImplementedException("Document has already opened and other document is opened");
-            }
+            if (!this.document.IsNew) throw
+                new NotImplementedException("Document has already opened and other document is opened");
+
+            this.document = await Document.OpenAsync(path, this.setting);
         }
 
         void FadeMessage()
@@ -434,7 +430,7 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> Quit()
         {
-            if (!this.document.IsModified) { return ProcessResult.Quit; }
+            if (!this.document.IsModified) return ProcessResult.Quit;
 
             var promptResult =
                 await this.Prompt(
@@ -443,6 +439,7 @@ namespace txte.TextEditor
                         new[] { Choice.No, Choice.Yes }
                     )
                 );
+
             if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.Yes)
             {
                 return ProcessResult.Quit;
@@ -587,7 +584,7 @@ namespace txte.TextEditor
                     this.message =
                         new Message(ColoredString.Concat(this.setting,
                             (
-                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})", 
+                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})",
                                 ColorSet.OutOfBounds
                             )
                         ));
