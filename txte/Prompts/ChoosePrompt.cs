@@ -36,6 +36,8 @@ namespace txte.Prompts
             }
         }
 
+        public CursorPosition? Cursor => null;
+
         readonly string message;
         readonly IReadOnlyList<TChoice> choices;
         int choosenIndex;

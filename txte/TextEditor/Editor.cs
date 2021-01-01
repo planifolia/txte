@@ -54,12 +54,12 @@ namespace txte.TextEditor
 
         public async Task RunAsync()
         {
-            this.RefreshScreen(0);
+            this.RefreshScreen(this.document.UpdateCursor(this.editArea));
             await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
             {
                 if (eventType == EventType.Timeout)
                 {
-                    this.FadeMessage();
+                    this.FadeMessage(this.document.UpdateCursor(this.editArea));
                     continue;
                 }
                 switch (await this.ProcessKeyPressAsync(keyInfo))
@@ -73,7 +73,7 @@ namespace txte.TextEditor
                 {
                     continue; //skip if muitiple chars are imput by IME, etc.
                 }
-                this.RefreshScreen(0);
+                this.RefreshScreen(this.document.UpdateCursor(this.editArea));
             }
         }
 
@@ -154,24 +154,25 @@ namespace txte.TextEditor
             this.document = await Document.OpenAsync(path, this.setting);
         }
 
-        void FadeMessage()
+        void FadeMessage(CursorPosition? cursor)
         {
             var editAreaHeight = this.editArea.Height;
             this.message.CheckExpiration(DateTime.Now);
             if (editAreaHeight != this.editArea.Height)
             {
-                this.RefreshScreen(editAreaHeight);
+                this.RefreshScreen(cursor, editAreaHeight);
             }
         }
 
-        void RefreshScreen(int from)
+        void RefreshScreen(CursorPosition? cursor) => this.RefreshScreen(cursor, 0);
+
+        void RefreshScreen(CursorPosition? cursor, int from)
         {
-            this.document.UpdateOffset(this.editArea);
             this.console.RefreshScreen(
                 from.AtMin(0),
                 this.setting,
                 this.RenderScreen,
-                (Point)this.document.Cursor);
+                cursor);
         }
 
         void RenderScreen(IScreen screen, int from)
@@ -333,12 +334,12 @@ namespace txte.TextEditor
         {
             using (this.prompt.SetTemporary(prompt))
             {
-                this.RefreshScreen(0);
+                this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1));
                 await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
                 {
                     if (eventType == EventType.Timeout)
                     {
-                        this.FadeMessage();
+                        this.FadeMessage(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1));
                         continue;
                     }
 
@@ -350,11 +351,11 @@ namespace txte.TextEditor
 
                     if (state is IModalNeedsRefreash)
                     {
-                        this.RefreshScreen(0);
+                        this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1));
                     }
                     else
                     {
-                        this.RefreshScreen(this.editArea.Height);
+                        this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1), this.editArea.Height);
                     }
                 }
             }
@@ -376,13 +377,13 @@ namespace txte.TextEditor
                     ));
                 this.message = message;
 
-                this.RefreshScreen(0);
+                this.RefreshScreen(null);
 
                 await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
                 {
                     if (eventType == EventType.Timeout)
                     {
-                        this.FadeMessage();
+                        this.FadeMessage(null);
                         continue;
                     }
                     if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
@@ -394,7 +395,7 @@ namespace txte.TextEditor
                         return await function();
                     }
 
-                    this.RefreshScreen(0);
+                    this.RefreshScreen(null);
                 }
             }
 
@@ -464,7 +465,7 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var promptInput = await this.Prompt(new InputPrompt("Save as:"));
+            var promptInput = await this.Prompt(new InputPrompt("Save as:", this.setting));
             if (promptInput is ModalOk<string>(var savePath))
             {
                 this.document.Path = savePath;
@@ -534,7 +535,7 @@ namespace txte.TextEditor
 
             using (this.document.OverlapHilighter.SetTemporary(new FindingHilighter(finder)))
             {
-                await this.Prompt(new FindPrompt("Search:", this.document, finder));
+                await this.Prompt(new FindPrompt("Search:", finder, this.document, this.setting));
             }
 
             return ProcessResult.Running;

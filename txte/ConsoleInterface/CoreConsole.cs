@@ -63,15 +63,18 @@ namespace txte.ConsoleInterface
             int from,
             Setting setting,
             Action<IScreen, int> renderScreen,
-            Point cursor)
+            CursorPosition? cursor)
         {
             var screen = new Screen(this, from, setting.AmbiguousCharIsFullWidth);
 
             Console.CursorVisible = false;
             Console.SetCursorPosition(0, from);
             renderScreen(screen, from);
-            Console.SetCursorPosition(cursor.X, cursor.Y);
-            Console.CursorVisible = true;
+            if (cursor is {} shown)
+            {
+                Console.SetCursorPosition(shown.Column, shown.Line);
+                Console.CursorVisible = true;
+            }
         }
 
         public void Clear() => Console.Clear();

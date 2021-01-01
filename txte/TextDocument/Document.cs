@@ -65,7 +65,7 @@ namespace txte.TextDocument
         public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew => this.Lines.Count == 0;
         public Line.List Lines { get; }
-        public RenderPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
+        public CursorPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
         public RenderPosition RenderPosition => new (this.valuePosition.Line, this.renderPositionColumn);
         public ValuePosition ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public RenderPosition Offset { get => this.offset; set => this.offset = value; }
@@ -365,6 +365,12 @@ namespace txte.TextDocument
             {
                 this.offset.Column = this.renderPositionColumn - editArea.Width + 1 + overshoot;
             }
+        }
+
+        public CursorPosition UpdateCursor(Size editArea)
+        {
+            this.UpdateOffset(editArea);
+            return this.Cursor;
         }
     }
 }

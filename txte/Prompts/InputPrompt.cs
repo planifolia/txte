@@ -1,23 +1,33 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using txte.Settings;
 using txte.State;
 using txte.Text;
 
 namespace txte.Prompts
 {
-    class InputPrompt : IPrompt, IPrompt<string>
+    class InputPrompt : IPrompt<string>
     {
-        public InputPrompt(string message)
+        public InputPrompt(string message, Setting setting)
         {
             this.Message = message;
+            this.setting = setting;
             this.input = new StringBuilder();
         }
 
         public string Message { get; }
 
+        readonly Setting setting;
         readonly StringBuilder input;
 
+        public CursorPosition? Cursor =>
+            new (
+                0,
+                this.Message.GetRenderLength(setting.AmbiguousCharIsFullWidth)
+                + 1
+                + this.Current.GetRenderLength(setting.AmbiguousCharIsFullWidth)
+            );
         public string Current => this.input.ToString();
 
         public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)

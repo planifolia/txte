@@ -9,6 +9,7 @@ namespace txte.Prompts
     interface IPrompt
     {
         IEnumerable<StyledString> ToStyledString();
+        CursorPosition? Cursor { get; }
     }
 
     /// For render prompt and process input

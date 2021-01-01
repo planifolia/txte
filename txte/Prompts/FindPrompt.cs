@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using txte.Settings;
 using txte.State;
 using txte.Text;
 using txte.TextDocument;
@@ -22,10 +23,9 @@ namespace txte.Prompts
                 indices
                 .Select(x =>
                 {
-                    var boundaries = line.Boundaries;
                     return new ColorSpan(
                         ((this.finder.CurrentMatch is {} found && found.Char == x && found.Line == line.Index) ? ColorSet.CurrentFound : ColorSet.Found),
-                        new Range(boundaries[x], boundaries[x + this.finder.Current.Length])
+                        new Range(x, x + this.finder.Current.Length)
                     );
                 })
                 .ToList();
@@ -152,23 +152,27 @@ namespace txte.Prompts
         }
     }
 
-    class FindPrompt : IPrompt, IPrompt<string>
+    class FindPrompt : IPrompt<string>
     {
 
-        public FindPrompt(string message, IDocument document, TextFinder finder)
+        public FindPrompt(string message, TextFinder finder, IDocument document, Setting setting)
         {
-            this.prompt = new InputPrompt(message);
+            this.prompt = new InputPrompt(message, setting);
+            this.finder = finder;
             this.document = document;
             this.savedPosition = this.document.ValuePosition;
             this.savedOffset = this.document.Offset;
-            this.finder = finder;
+            this.setting = setting;
         }
 
+        public CursorPosition? Cursor => this.prompt.Cursor;
+
         readonly InputPrompt prompt;
+        readonly TextFinder finder;
         readonly IDocument document;
         readonly ValuePosition savedPosition;
         readonly RenderPosition savedOffset;
-        readonly TextFinder finder;
+        readonly Setting setting;
 
         public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
         {

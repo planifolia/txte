@@ -21,7 +21,7 @@ namespace txte.ConsoleInterface
             int from,
             Setting setting,
             Action<IScreen, int> RenderScreen,
-            Point cursor);
+            CursorPosition? cursor);
         void Clear();
     }
 
