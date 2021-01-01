@@ -18,7 +18,7 @@ namespace txte.TextEditor
 {
     class Editor
     {
-        public static string Version = 
+        public static string Version =
             Assembly.GetEntryAssembly()!
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
             .InformationalVersion
@@ -149,14 +149,10 @@ namespace txte.TextEditor
 
         async Task OpenDocumentAsync(string path)
         {
-            if (this.document.IsNew)
-            {
-                this.document = await Document.OpenAsync(path, this.setting);
-            }
-            else
-            {
-                throw new NotImplementedException("Document has already opened and other document is opened");
-            }
+            if (!this.document.IsNew) throw
+                new NotImplementedException("Document has already opened and other document is opened");
+
+            this.document = await Document.OpenAsync(path, this.setting);
         }
 
         void FadeMessage()
@@ -318,7 +314,7 @@ namespace txte.TextEditor
         }
         void DrawMessageBar(IScreen screen)
         {
-            if (!this.message.IsValid) { return; }
+            if (!this.message.IsValid) return;
 
             var text = this.message.Value;
             var textLength = text.GetRenderLength();
@@ -434,7 +430,7 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> Quit()
         {
-            if (!this.document.IsModified) { return ProcessResult.Quit; }
+            if (!this.document.IsModified) return ProcessResult.Quit;
 
             var promptResult =
                 await this.Prompt(
@@ -443,6 +439,7 @@ namespace txte.TextEditor
                         new[] { Choice.No, Choice.Yes }
                     )
                 );
+
             if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.Yes)
             {
                 return ProcessResult.Quit;
@@ -532,11 +529,12 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var finder = new TextFinder(this.document);
-            using var _ = this.document.Finding.SetTemporary(finder);
-            var findPrompt = new FindPrompt("Search:", finder);
+            var prompt = new FindPrompt("Search:");
+            using var finder = new TextFinder(prompt, this.document);
+            using var highlighter = new FindingHilighter(finder);
+            using var _ = this.document.OverlapHilighter.SetTemporary(highlighter);
 
-            await this.Prompt(findPrompt);
+            await this.Prompt(prompt);
 
             return ProcessResult.Running;
         }
@@ -587,7 +585,7 @@ namespace txte.TextEditor
                     this.message =
                         new Message(ColoredString.Concat(this.setting,
                             (
-                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})", 
+                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})",
                                 ColorSet.OutOfBounds
                             )
                         ));

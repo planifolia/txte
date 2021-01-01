@@ -5,18 +5,23 @@ namespace txte.Input
     struct KeyCombination
     {
         public KeyCombination(ConsoleKey key, bool shifted, bool controled)
-        : this(key, shifted, false, controled) { }
+        : this(key, shifted, controled, false) { }
 
-        public KeyCombination(ConsoleKey key, bool shifted, bool alted, bool controled) =>
-            (this.Key, this.Shifted, this.Alted, this.Controled) = (key, shifted, alted, controled);
+        public KeyCombination(ConsoleKey key, bool shifted, bool controled, bool alted)
+        {
+            this.Key = key;
+            this.Shifted = shifted;
+            this.Controled = controled;
+            this.Alted = alted;
+        }
 
         public readonly ConsoleKey Key;
         public readonly bool Shifted;
-        public readonly bool Alted;
         public readonly bool Controled;
+        public readonly bool Alted;
 
         public KeyCombination WithControl() =>
-            new KeyCombination(this.Key, this.Shifted, this.Alted, true);
+            new KeyCombination(this.Key, this.Shifted, true, this.Alted);
     }
 
     static class KeyCombinationExtensions

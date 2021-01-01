@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Text;
 using txte.Settings;
 
@@ -12,38 +11,48 @@ namespace txte.Text
         {
             var body = new StringBuilder();
             var colors = new List<ColorSpan>();
+
             foreach (var (value, color) in parts)
             {
-                if (string.IsNullOrEmpty(value)) { continue; }
+                if (string.IsNullOrEmpty(value)) continue;
+
                 var current = body.Length;
                 body.Append(value);
                 colors.Add(new ColorSpan(color, new Range(current, body.Length)));
             }
+
             return new ColoredString(setting, body.ToString(), false, new Coloring(colors), false);
         }
 
         public ColoredString(Setting setting, string body)
-            : this(
-                setting,
-                body,
-                false,
-                new Coloring(
-                    (body.Length == 0)
-                    ? new List<ColorSpan>()
-                    : new List<ColorSpan>
+        : this(
+            setting,
+            body,
+            false,
+            new Coloring(
+                (body.Length == 0) ? new List<ColorSpan>()
+                : (
+                    new List<ColorSpan>
                     {
                         new ColorSpan(ColorSet.Default, new Range(0, body.Length))
                     }
-                ),
-                false)
+                )
+            ),
+            false
+        )
         { }
 
         public ColoredString(
             Setting setting, string body,
             bool hasFlagmentedHead, Coloring colors, bool hasFlagmentedTail
-        ) =>
-            (this.setting, this.body, this.colors, this.hasFragmentedHead, this.hasFragmentedTail) =
-                (setting, body, colors, hasFlagmentedHead, hasFlagmentedTail);
+        )
+        {
+            this.setting = setting;
+            this.body = body;
+            this.colors = colors;
+            this.hasFragmentedHead = hasFlagmentedHead;
+            this.hasFragmentedTail = hasFlagmentedTail;
+        }
 
         readonly Setting setting;
         readonly string body;
@@ -53,13 +62,12 @@ namespace txte.Text
 
         public ColoredString Overlay(Coloring ovarlay)
         {
-            if (this.colors.Count == 0) { return this; }
+            if (this.colors.Count == 0) return this;
 
             var valueBegin = this.colors[0].ValueRange.Begin;
             var valueEnd = this.colors[^1].ValueRange.End;
 
             var clipedOverlay = ovarlay.Clip(valueBegin, valueEnd);
-
 
             return new ColoredString(
                 this.setting, this.body,
@@ -68,23 +76,21 @@ namespace txte.Text
 
         public IEnumerable<StyledString> ToStyledStrings()
         {
-            if (this.hasFragmentedHead) { yield return StyledString.LeftFragment; }
-            foreach (var color in this.colors)
-            {
-                yield return new StyledString(
+            if (this.hasFragmentedHead) yield return StyledString.LeftFragment;
+
+            foreach (var color in this.colors) yield return 
+                new StyledString(
                     this.body.Substring(color.ValueRange.Begin, color.ValueRange.End - color.ValueRange.Begin),
                     color.Color
                 );
-            }
-            if (this.hasFragmentedTail) { yield return StyledString.RightFragment; }
+
+            if (this.hasFragmentedTail) yield return StyledString.RightFragment;
         }
 
         public ColoredString SubRenderString(int renderStart, int renderLength)
         {
-            if (this.colors.Count == 0)
-            {
-                return this;
-            }
+            if (this.colors.Count == 0) return this;
+
             using var colorSource = this.colors.GetEnumerator();
             bool ambiguousIsFullWidth = this.setting.AmbiguousCharIsFullWidth;
             int renderPos = 0;
@@ -96,11 +102,13 @@ namespace txte.Text
             {
                 renderPos++;
             }
+
             while (renderPos < renderStart)
             {
                 renderPos += this.body[valuePos].GetEastAsianWidth(ambiguousIsFullWidth);
                 valuePos++;
             }
+
             var startIsFragmented = renderStart < renderPos;
             var valueStart = valuePos;
 
@@ -124,16 +132,18 @@ namespace txte.Text
 
         public int GetRenderLength()
         {
-            if (this.colors.Count == 0) { return 0; }
+            if (this.colors.Count == 0) return 0;
 
             var ambiguousIsFullWidth = this.setting.AmbiguousCharIsFullWidth;
             var start = this.colors[0].ValueRange.Begin;
             var end = this.colors[^1].ValueRange.End;
             int length = 0;
+
             for (int i = start; i < end; i++)
             {
                 length += this.body[i].GetEastAsianWidth(ambiguousIsFullWidth);
             }
+
             return length;
         }
     }
@@ -141,20 +151,24 @@ namespace txte.Text
 
     class ColorSpan : IComparable<ColorSpan>
     {
-        public ColorSpan(ColorSet color, Range valueRange) =>
-            (this.Color, this.ValueRange) = (color, valueRange);
+        public ColorSpan(ColorSet color, Range valueRange)
+        {
+            this.Color = color;
+            this.ValueRange = valueRange;
+        }
 
         public Range ValueRange;
         public ColorSet Color;
 
         public int CompareTo(ColorSpan? other)
         {
-            if (other == null) { return 1; }
-            if (this.ValueRange.Begin < other.ValueRange.Begin) { return -1; }
-            if (other.ValueRange.Begin < this.ValueRange.Begin) { return 1; }
+            if (other == null) return 1;
 
-            if (this.ValueRange.End < other.ValueRange.End) { return -1; }
-            if (other.ValueRange.End < this.ValueRange.End) { return 1; }
+            if (this.ValueRange.Begin < other.ValueRange.Begin) return -1;
+            if (other.ValueRange.Begin < this.ValueRange.Begin) return 1;
+
+            if (this.ValueRange.End < other.ValueRange.End) return -1;
+            if (other.ValueRange.End < this.ValueRange.End) return 1;
 
             return 0;
         }

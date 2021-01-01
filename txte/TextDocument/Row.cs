@@ -47,7 +47,10 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.source.IsUpdated) { this.Update(); }
+                if (this.source.IsUpdated)
+                {
+                    this.Update();
+                }
                 return this.value;
             }
         }
@@ -56,7 +59,10 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.source.IsUpdated) { this.Update(); }
+                if (this.source.IsUpdated)
+                {
+                    this.Update();
+                }
                 return this.boundaries;
             }
         }
@@ -131,9 +137,25 @@ namespace txte.TextDocument
 
     class Row
     {
+        public class List : List<Row>
+        {
+            public new Row this[int index]
+            {
+                get {
+                    var row = base[index];
+                    row.Index = index;
+                    return row;
+                }
+                set => base[index] = value;
+            }
+        }
+
         public Row(Setting setting, string value) : this(setting, value, false) { }
         public Row(Setting setting, string value, bool isNewLine)
         {
+            // Index is set by Row.List
+            this.Index = -1;
+
             this.setting = setting;
             this.valueLayer = new StringLayer(value);
             this.IsModified = isNewLine;
@@ -141,6 +163,7 @@ namespace txte.TextDocument
             this.syntaxCache = null!;
         }
 
+        public int Index { get; private set; }
         public string Value => this.valueLayer.Value;
         public IReadOnlyList<int> Boundaries => this.figureLayer.Boundaries;
 

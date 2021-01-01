@@ -23,8 +23,9 @@ namespace txte.ConsoleInterface
                 var timeout = DateTime.Now + TimeSpan.FromMilliseconds(timeoutMillisec);
                 while (true)
                 {
-                    if (Console.KeyAvailable) { yield return new InputEventArgs(EventType.UserAction, Console.ReadKey(true)); }
-                    if (DateTime.Now >= timeout) { break; }
+                    if (Console.KeyAvailable) yield return
+                        new InputEventArgs(EventType.UserAction, Console.ReadKey(true));
+                    if (DateTime.Now >= timeout) break;
                     await Task.Delay(10);
                 }
                 yield return new InputEventArgs(EventType.Timeout, default);

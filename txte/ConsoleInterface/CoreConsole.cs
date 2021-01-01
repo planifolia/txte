@@ -36,7 +36,7 @@ namespace txte.ConsoleInterface
 
         OriginatedColor ForegroundColor
         {
-            get { return this._foregroundColor; }
+            get => this._foregroundColor;
             set
             {
                 this._foregroundColor = value;
@@ -47,7 +47,7 @@ namespace txte.ConsoleInterface
 
         OriginatedColor BackgroundColor
         {
-            get { return this._backgroundColor; }
+            get => this._backgroundColor;
             set
             {
                 this._backgroundColor = value;
@@ -57,8 +57,8 @@ namespace txte.ConsoleInterface
         OriginatedColor _backgroundColor;
 
 
-        public IAsyncEnumerable<InputEventArgs> ReadKeysOrTimeoutAsync()
-            => this.keyReader.ReadKeysOrTimeoutAsync();
+        public IAsyncEnumerable<InputEventArgs> ReadKeysOrTimeoutAsync() =>
+            this.keyReader.ReadKeysOrTimeoutAsync();
 
         public void RefreshScreen(
             int from,
@@ -87,8 +87,8 @@ namespace txte.ConsoleInterface
 
         void CheckConsoleRequirements()
         {
-            if (Console.IsInputRedirected) { throw new EditorException("Console input is redirected."); }
-            if (Console.IsOutputRedirected) { throw new EditorException("Console output is redirected."); }
+            if (Console.IsInputRedirected) throw new EditorException("Console input is redirected.");
+            if (Console.IsOutputRedirected) throw new EditorException("Console output is redirected.");
         }
 
         void CheckSpec()
@@ -99,7 +99,7 @@ namespace txte.ConsoleInterface
 
         int EstimateAmbiguousCharWidth()
         {
-            var testChars = new [] {'Å', 'α', 'Я', '○'};
+            var testChars = new[] { 'Å', 'α', 'Я', '○' };
             return
                 testChars.Select(x =>
                 {
@@ -135,15 +135,13 @@ namespace txte.ConsoleInterface
             this.defaultForegroundColor =
                 new OriginatedColor(ColorType.Foreground, Console.ForegroundColor);
             this.BackgroundColor =
-            this.defaultBackgroundColor
-                = new OriginatedColor(ColorType.Background, Console.BackgroundColor);
+            this.defaultBackgroundColor =
+                new OriginatedColor(ColorType.Background, Console.BackgroundColor);
         }
 
-        void ReverseColor()
-        {
+        void ReverseColor() =>
             (this.ForegroundColor, this.BackgroundColor) =
                 (this.BackgroundColor, this.ForegroundColor);
-        }
 
 
         class Screen : IScreen
@@ -286,7 +284,7 @@ namespace txte.ConsoleInterface
                 // Treat the default color (-1) when reverse onsole color.
 
                 // If this.Color is specified, return that color.
-                if ((int)this.Color != -1) { return this.Color; }
+                if ((int)this.Color != -1) return this.Color;
 
                 // Return the color assumed that color scheme is dark if the console color is reversed. 
                 if (target == ColorType.Foreground && this.Origin == ColorType.Background)

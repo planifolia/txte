@@ -4,10 +4,7 @@ namespace txte.TextEditor
 {
     class Menu
     {
-        public Menu(KeyBindSet keyBinds)
-        {
-            this.KeyBinds = keyBinds;
-        }
+        public Menu(KeyBindSet keyBinds) => this.KeyBinds = keyBinds;
 
         public readonly KeyBindSet KeyBinds;
         public bool IsShown => this.isShown.Value;

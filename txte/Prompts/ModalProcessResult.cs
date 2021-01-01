@@ -2,14 +2,14 @@ namespace txte.State
 {
     abstract class ModalProcessResult<T>
     {
-        public static implicit operator ModalProcessResult<T>(ModalNeedsRefreash untyped)
-            => ModalNeedsRefreash<T>.Default;
-        public static implicit operator ModalProcessResult<T>(ModalRunning untyped)
-            => ModalRunning<T>.Default;
-        public static implicit operator ModalProcessResult<T>(ModalCancel untyped)
-            => ModalCancel<T>.Default;
-        public static implicit operator ModalProcessResult<T>(ModalUnhandled untyped)
-            => ModalUnhandled<T>.Default;
+        public static implicit operator ModalProcessResult<T>(ModalNeedsRefreash untyped) =>
+            ModalNeedsRefreash<T>.Default;
+        public static implicit operator ModalProcessResult<T>(ModalRunning untyped) =>
+            ModalRunning<T>.Default;
+        public static implicit operator ModalProcessResult<T>(ModalCancel untyped) =>
+            ModalCancel<T>.Default;
+        public static implicit operator ModalProcessResult<T>(ModalUnhandled untyped) =>
+            ModalUnhandled<T>.Default;
     }
 
     interface IModalOk { }

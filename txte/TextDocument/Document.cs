@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -15,15 +14,14 @@ namespace txte.TextDocument
 {
     interface IDocument
     {
-        List<Row> Rows { get; }
+        Row.List Rows { get; }
         Point ValuePosition { get; set; }
         Point Offset { get; set; }
     }
 
-    interface ITextFinder
+    interface IOverlapHilighter
     {
-        string Current { get; }
-        Coloring Highlight(int rowIndex, Row row);
+        ColoredString Highlight(Row row);
     }
 
     class Document : IDocument
@@ -37,11 +35,13 @@ namespace txte.TextDocument
 
             using var reader = new StreamReader(path, Encoding.UTF8);
             var text = await reader.ReadToEndAsync();
+
             var newLine = AnyNewLinePattern.Match(text);
             if (newLine.Success)
             {
                 doc.NewLineFormat = EndOfLineFormat.FromSequence(newLine.Value);
             }
+
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
             {
@@ -57,7 +57,7 @@ namespace txte.TextDocument
         {
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
-            this.Rows = new List<Row> { };
+            this.Rows = new Row.List { };
             this.valuePosition = new Point(0, 0);
             this.offset = new Point(0, 0);
             this.setting = setting;
@@ -66,13 +66,13 @@ namespace txte.TextDocument
         public string? Path { get; set; }
         public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew => this.Rows.Count == 0;
-        public List<Row> Rows { get; }
+        public Row.List Rows { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
         public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public Point Offset { get => this.offset; set => this.offset = value; }
         public bool IsModified => this.Rows.Any(x => x.IsModified);
-        public Temporary<ITextFinder> Finding { get; } = new Temporary<ITextFinder>();
+        public Temporary<IOverlapHilighter> OverlapHilighter { get; } = new ();
 
         readonly Setting setting;
 
@@ -82,17 +82,9 @@ namespace txte.TextDocument
 
         public void DrawRow(IScreen screen, int docRow)
         {
-            var renderBase = this.Rows[docRow].Render;
-            ColoredString render;
-            if (this.Finding.HasValue && this.Finding.Value.Current.Length != 0)
-            {
-                var founds = this.Finding.Value.Highlight(docRow, this.Rows[docRow]);
-                render = renderBase.Overlay(founds);
-            }
-            else
-            {
-                render = renderBase;
-            }
+            var render = 
+                (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Rows[docRow])
+                : this.Rows[docRow].Render;
             var clippedLength =
                 (render.GetRenderLength() - this.Offset.X).Clamp(0, screen.Width);
             if (clippedLength > 0)
@@ -110,7 +102,8 @@ namespace txte.TextDocument
 
         public void Save()
         {
-            if (this.Path == null) { return; }
+            if (this.Path == null) return;
+
             using var file = new StreamWriter(this.Path, false, Encoding.UTF8);
             int rowCount = 0;
             foreach (var row in this.Rows)
