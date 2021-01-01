@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using txte.State;
 using txte.Text;
@@ -77,56 +76,56 @@ namespace txte.Prompts
             var docLines = this.lines;
             var query = this.Current;
 
-            int findingCol = lastMatch.Value.X;
+            int findingChar = lastMatch.Value.X;
             int findingLine = lastMatch.Value.Y;
 
             if (direction == Direction.Initial)
             {
-                findingCol = docLines[findingLine].Value.IndexOf(query, findingCol);
-                if (findingCol != NOT_FOUND) return new Point(findingCol, findingLine);
+                findingChar = docLines[findingLine].Value.IndexOf(query, findingChar);
+                if (findingChar != NOT_FOUND) return new Point(findingChar, findingLine);
             }
 
             // for round trip to the rest part of the same line
             for (var i = 0; i < docLines.Count + 1; i++)
             {
-                if (findingCol == NOT_FOUND)
+                if (findingChar == NOT_FOUND)
                 {
-                    (findingLine, findingCol) = MoveLine(findingLine, findingCol, direction, docLines);
+                    (findingLine, findingChar) = MoveLine(findingLine, findingChar, direction, docLines);
                 }
                 else
                 {
-                    findingCol += (direction != Direction.Backword) ? query.Length : -1;
+                    findingChar += (direction != Direction.Backword) ? query.Length : -1;
                     // move from the start / end of line to next line
-                    if (findingCol == -1 || findingCol == docLines[findingLine].Value.Length)
+                    if (findingChar == -1 || findingChar == docLines[findingLine].Value.Length)
                     {
-                        (findingLine, findingCol) = MoveLine(findingLine, findingCol, direction, docLines);
+                        (findingLine, findingChar) = MoveLine(findingLine, findingChar, direction, docLines);
                     }
                 }
 
                 // if the line is empty, the query string cannot be found
                 if (docLines[findingLine].Value.Length == 0)
                 {
-                    findingCol = NOT_FOUND;
+                    findingChar = NOT_FOUND;
                     continue;
                 }
 
                 if (direction != Direction.Backword)
                 {
-                    findingCol = docLines[findingLine].Value.IndexOf(query, findingCol);
+                    findingChar = docLines[findingLine].Value.IndexOf(query, findingChar);
                 }
                 else
                 {
-                    findingCol =
+                    findingChar =
                         docLines[findingLine].Value
                         .IndicesOf(query, allowOverlap: false)
-                        .Where(x => x <= findingCol)
+                        .Where(x => x <= findingChar)
                         .DefaultIfEmpty(NOT_FOUND).Max();
                 }
-                if (findingCol != NOT_FOUND) return new Point(findingCol, findingLine);
+                if (findingChar != NOT_FOUND) return new Point(findingChar, findingLine);
             }
             return null;
 
-            static (int, int) MoveLine(int findingLine, int findingCol, Direction direction, Line.List docLines)
+            static (int, int) MoveLine(int findingLine, int findingChar, Direction direction, Line.List docLines)
             {
                 if (direction != Direction.Backword)
                 {
@@ -137,7 +136,7 @@ namespace txte.Prompts
                         findingLine = 0;
                     }
 
-                    findingCol = 0;
+                    findingChar = 0;
                 }
                 else
                 {
@@ -148,10 +147,10 @@ namespace txte.Prompts
                         findingLine = docLines.Count - 1;
                     }
 
-                    findingCol = docLines[findingLine].Value.Length - 1;
+                    findingChar = docLines[findingLine].Value.Length - 1;
                 }
 
-                return (findingLine, findingCol);
+                return (findingLine, findingChar);
             }
         }
     }
