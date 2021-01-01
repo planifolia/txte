@@ -1,6 +1,4 @@
-using System;
-
-namespace txte
+namespace txte.TextEditor
 {
     static class PositionExtensions
     {
