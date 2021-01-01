@@ -177,25 +177,25 @@ namespace txte.TextEditor
 
         void RenderScreen(IScreen screen, int from)
         {
-            this.DrawEditorRows(screen, from);
+            this.DrawEditorLines(screen, from);
             this.DrawMessageBar(screen);
             this.DrawSatausBar(screen);
             this.DrawPromptBar(screen);
         }
 
-        void DrawEditorRows(IScreen screen, int from)
+        void DrawEditorLines(IScreen screen, int from)
         {
             bool ambiguousSetting = this.setting.AmbiguousCharIsFullWidth;
             for (int y = from; y < this.editArea.Height; y++)
             {
-                var docRow = y + this.document.Offset.Y;
+                var docLine = y + this.document.Offset.Y;
                 if (this.menu.IsShown)
                 {
                     this.DrawMenu(screen, y);
                 }
-                else if (docRow < this.document.Rows.Count)
+                else if (docLine < this.document.Lines.Count)
                 {
-                    this.DrawDocumentRow(screen, ambiguousSetting, docRow);
+                    this.DrawDocumentLine(screen, ambiguousSetting, docLine);
                 }
                 else
                 {
@@ -204,20 +204,20 @@ namespace txte.TextEditor
             }
         }
 
-        void DrawDocumentRow(IScreen screen, bool ambiguousSetting, int docRow)
+        void DrawDocumentLine(IScreen screen, bool ambiguousSetting, int docLine)
         {
-            this.document.DrawRow(screen, docRow);
+            this.document.DrawLine(screen, docLine);
         }
 
         void DrawMenu(IScreen screen, int y)
         {
             var keyJoiner = " + ";
             var separator = "  ";
-            var titleRowCount = 2;
+            var titleLineCount = 2;
 
-            if (y - titleRowCount >= this.menu.KeyBinds.KeyBinds.Count)
+            if (y - titleLineCount >= this.menu.KeyBinds.KeyBinds.Count)
             {
-                screen.AppendRow(new[]
+                screen.AppendLine(new[]
                 {
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
@@ -227,7 +227,7 @@ namespace txte.TextEditor
                 var message = "Shortcuts";
                 var messageLength = message.Length;
                 var leftPadding = (this.console.Width - messageLength) / 2 - 1;
-                screen.AppendRow(new[]
+                screen.AppendLine(new[]
                 {
                     new StyledString("~", ColorSet.OutOfBounds),
                     new StyledString(new string(' ', leftPadding), ColorSet.OutOfBounds),
@@ -236,7 +236,7 @@ namespace txte.TextEditor
             }
             else if (y == 1)
             {
-                screen.AppendRow(new[]
+                screen.AppendLine(new[]
                 {
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
@@ -244,7 +244,7 @@ namespace txte.TextEditor
             }
             else
             {
-                var item = this.menu.KeyBinds.KeyBinds[y - titleRowCount];
+                var item = this.menu.KeyBinds.KeyBinds[y - titleLineCount];
 
                 var leftLength = item.explanation.Length;
                 var rightLength = item.keys.Select(x => x.Length).Sum() + (item.keys.Length - 1) * keyJoiner.Length;
@@ -264,7 +264,7 @@ namespace txte.TextEditor
                     spans.Add(new StyledString(key, ColorSet.KeyExpression));
                     i++;
                 }
-                screen.AppendRow(spans);
+                screen.AppendLine(spans);
             }
         }
 
@@ -275,29 +275,29 @@ namespace txte.TextEditor
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = welcome.Length.AtMax(this.console.Width);
                 var padding = (this.console.Width - welcomeLength) / 2;
-                var rowBuffer = new StringBuilder();
+                var lineBuffer = new StringBuilder();
                 if (padding > 0)
                 {
-                    rowBuffer.Append("~");
+                    lineBuffer.Append("~");
                 }
                 for (int i = 1; i < padding; i++)
                 {
-                    rowBuffer.Append(" ");
+                    lineBuffer.Append(" ");
                 }
-                rowBuffer.Append(welcome.Substring(0, welcomeLength));
+                lineBuffer.Append(welcome.Substring(0, welcomeLength));
 
-                screen.AppendOuterRow(rowBuffer.ToString());
+                screen.AppendOuterLine(lineBuffer.ToString());
             }
             else
             {
-                screen.AppendOuterRow("~");
+                screen.AppendOuterLine("~");
             }
         }
         void DrawPromptBar(IScreen screen)
         {
             if (this.prompt.HasValue)
             {
-                screen.AppendRow(this.prompt.Value.ToStyledString());
+                screen.AppendLine(this.prompt.Value.ToStyledString());
             }
         }
         void DrawSatausBar(IScreen screen)
@@ -310,7 +310,7 @@ namespace txte.TextEditor
             var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
-            screen.AppendRow(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
+            screen.AppendLine(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
         }
         void DrawMessageBar(IScreen screen)
         {
@@ -327,7 +327,7 @@ namespace txte.TextEditor
                     new StyledString(new string(' ', this.console.Width - displayLength - 1)),
                 }
                 : Enumerable.Empty<StyledString>();
-            screen.AppendRow(prefix.Concat(render.ToStyledStrings()));
+            screen.AppendLine(prefix.Concat(render.ToStyledStrings()));
         }
 
         async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
@@ -531,7 +531,7 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var finder = new TextFinder(this.document.Rows);
+            var finder = new TextFinder(this.document.Lines);
 
             using (this.document.OverlapHilighter.SetTemporary(new FindingHilighter(finder)))
             {

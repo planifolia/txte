@@ -150,7 +150,7 @@ namespace txte.ConsoleInterface
             {
                 this.console = console;
                 this.size = console.Size;
-                this.rowCount = from;
+                this.lineCount = from;
                 this.ambuguosIsfullWidth = ambuguosIsfullWidth;
             }
 
@@ -160,9 +160,9 @@ namespace txte.ConsoleInterface
             readonly Size size;
             readonly bool ambuguosIsfullWidth;
 
-            int rowCount;
+            int lineCount;
 
-            public void AppendRow(string value)
+            public void AppendLine(string value)
             {
                 int written = 0;
                 Console.Write(value);
@@ -172,14 +172,14 @@ namespace txte.ConsoleInterface
                 {
                     Console.Write(new string(' ', padding));
                 }
-                if (this.rowCount < this.size.Height - 1)
+                if (this.lineCount < this.size.Height - 1)
                 {
                     Console.WriteLine();
                 }
-                this.rowCount++;
+                this.lineCount++;
             }
 
-            public void AppendRow(IEnumerable<StyledString> spans)
+            public void AppendLine(IEnumerable<StyledString> spans)
             {
                 int written = 0;
                 foreach (var span in spans)
@@ -192,14 +192,14 @@ namespace txte.ConsoleInterface
                 {
                     Console.Write(new string(' ', padding));
                 }
-                if (this.rowCount < this.size.Height - 1)
+                if (this.lineCount < this.size.Height - 1)
                 {
                     Console.WriteLine();
                 }
-                this.rowCount++;
+                this.lineCount++;
             }
 
-            public void AppendOuterRow(string value)
+            public void AppendOuterLine(string value)
             {
                 var foreground = this.console.ForegroundColor;
                 var background = this.console.BackgroundColor;
@@ -207,7 +207,7 @@ namespace txte.ConsoleInterface
                 {
                     this.console.ForegroundColor = new OriginatedColor(ConsoleColor.DarkCyan);
                     this.console.BackgroundColor = this.console.defaultBackgroundColor;
-                    this.AppendRow(value);
+                    this.AppendLine(value);
                 }
                 finally
                 {

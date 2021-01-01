@@ -34,8 +34,8 @@ namespace txte.ConsoleInterface
     {
         int Width { get; }
 
-        void AppendRow(string value);
-        void AppendRow(IEnumerable<StyledString> spans);
-        void AppendOuterRow(string value);
+        void AppendLine(string value);
+        void AppendLine(IEnumerable<StyledString> spans);
+        void AppendOuterLine(string value);
     }
 }

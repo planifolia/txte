@@ -14,23 +14,23 @@ namespace txte.Prompts
 
         readonly TextFinder finder;
 
-        public ColoredString Highlight(Row row)
+        public ColoredString Highlight(Line line)
         {
-            if (this.finder.Current.Length == 0) return row.Render;
+            if (this.finder.Current.Length == 0) return line.Render;
 
-            var indices = row.Value.IndicesOf(this.finder.Current, allowOverlap: false);
+            var indices = line.Value.IndicesOf(this.finder.Current, allowOverlap: false);
             var founds =
                 indices
                 .Select(x =>
                 {
-                    var boundaries = row.Boundaries;
+                    var boundaries = line.Boundaries;
                     return new ColorSpan(
-                        ((this.finder.CurrentMatch is {} found && found.X == x && found.Y == row.Index) ? ColorSet.CurrentFound : ColorSet.Found),
+                        ((this.finder.CurrentMatch is {} found && found.X == x && found.Y == line.Index) ? ColorSet.CurrentFound : ColorSet.Found),
                         new Range(boundaries[x], boundaries[x + this.finder.Current.Length])
                     );
                 })
                 .ToList();
-            return row.Render.Overlay(new Coloring(founds));
+            return line.Render.Overlay(new Coloring(founds));
         }
     }
 
@@ -44,9 +44,9 @@ namespace txte.Prompts
             Backword,
         }
 
-        public TextFinder(Row.List rows)
+        public TextFinder(Line.List lines)
         {
-            this.rows = rows;
+            this.lines = lines;
 
             this.Current = "";
             this.CurrentMatch = null;
@@ -55,7 +55,7 @@ namespace txte.Prompts
         public string Current { get; private set; }
         public Point? CurrentMatch { get; private set; }
 
-        readonly Row.List rows;
+        readonly Line.List lines;
 
         public Point? Find(string query) => this.CurrentMatch = this.Find(query, new Point(0, 0));
 
@@ -74,37 +74,37 @@ namespace txte.Prompts
             // When the query string is not found in this document, ignore FindNext() / FindPrevious()
             if (!lastMatch.HasValue) return null;
 
-            var docRows = this.rows;
+            var docLines = this.lines;
             var query = this.Current;
 
             int findingCol = lastMatch.Value.X;
-            int findingRow = lastMatch.Value.Y;
+            int findingLine = lastMatch.Value.Y;
 
             if (direction == Direction.Initial)
             {
-                findingCol = docRows[findingRow].Value.IndexOf(query, findingCol);
-                if (findingCol != NOT_FOUND) return new Point(findingCol, findingRow);
+                findingCol = docLines[findingLine].Value.IndexOf(query, findingCol);
+                if (findingCol != NOT_FOUND) return new Point(findingCol, findingLine);
             }
 
             // for round trip to the rest part of the same line
-            for (var i = 0; i < docRows.Count + 1; i++)
+            for (var i = 0; i < docLines.Count + 1; i++)
             {
                 if (findingCol == NOT_FOUND)
                 {
-                    (findingRow, findingCol) = MoveLine(findingRow, findingCol, direction, docRows);
+                    (findingLine, findingCol) = MoveLine(findingLine, findingCol, direction, docLines);
                 }
                 else
                 {
                     findingCol += (direction != Direction.Backword) ? query.Length : -1;
                     // move from the start / end of line to next line
-                    if (findingCol == -1 || findingCol == docRows[findingRow].Value.Length)
+                    if (findingCol == -1 || findingCol == docLines[findingLine].Value.Length)
                     {
-                        (findingRow, findingCol) = MoveLine(findingRow, findingCol, direction, docRows);
+                        (findingLine, findingCol) = MoveLine(findingLine, findingCol, direction, docLines);
                     }
                 }
 
                 // if the line is empty, the query string cannot be found
-                if (docRows[findingRow].Value.Length == 0)
+                if (docLines[findingLine].Value.Length == 0)
                 {
                     findingCol = NOT_FOUND;
                     continue;
@@ -112,46 +112,46 @@ namespace txte.Prompts
 
                 if (direction != Direction.Backword)
                 {
-                    findingCol = docRows[findingRow].Value.IndexOf(query, findingCol);
+                    findingCol = docLines[findingLine].Value.IndexOf(query, findingCol);
                 }
                 else
                 {
                     findingCol =
-                        docRows[findingRow].Value
+                        docLines[findingLine].Value
                         .IndicesOf(query, allowOverlap: false)
                         .Where(x => x <= findingCol)
                         .DefaultIfEmpty(NOT_FOUND).Max();
                 }
-                if (findingCol != NOT_FOUND) return new Point(findingCol, findingRow);
+                if (findingCol != NOT_FOUND) return new Point(findingCol, findingLine);
             }
             return null;
 
-            static (int, int) MoveLine(int findingRow, int findingCol, Direction direction, Row.List docRows)
+            static (int, int) MoveLine(int findingLine, int findingCol, Direction direction, Line.List docLines)
             {
                 if (direction != Direction.Backword)
                 {
-                    findingRow++;
+                    findingLine++;
                     // wrap arround at the start / end of file
-                    if (findingRow >= docRows.Count)
+                    if (findingLine >= docLines.Count)
                     {
-                        findingRow = 0;
+                        findingLine = 0;
                     }
 
                     findingCol = 0;
                 }
                 else
                 {
-                    findingRow--;
+                    findingLine--;
                     // wrap arround at the start / end of file
-                    if (findingRow < 0)
+                    if (findingLine < 0)
                     {
-                        findingRow = docRows.Count - 1;
+                        findingLine = docLines.Count - 1;
                     }
 
-                    findingCol = docRows[findingRow].Value.Length - 1;
+                    findingCol = docLines[findingLine].Value.Length - 1;
                 }
 
-                return (findingRow, findingCol);
+                return (findingLine, findingCol);
             }
         }
     }

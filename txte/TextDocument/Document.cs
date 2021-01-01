@@ -14,14 +14,14 @@ namespace txte.TextDocument
 {
     interface IDocument
     {
-        Row.List Rows { get; }
+        Line.List Lines { get; }
         Point ValuePosition { get; set; }
         Point Offset { get; set; }
     }
 
     interface IOverlapHilighter
     {
-        ColoredString Highlight(Row row);
+        ColoredString Highlight(Line line);
     }
 
     class Document : IDocument
@@ -45,7 +45,7 @@ namespace txte.TextDocument
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
             {
-                doc.Rows.Add(new Row(setting, line));
+                doc.Lines.Add(new Line(setting, line));
             }
 
             return doc;
@@ -57,7 +57,7 @@ namespace txte.TextDocument
         {
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
-            this.Rows = new Row.List { };
+            this.Lines = new Line.List { };
             this.valuePosition = new Point(0, 0);
             this.offset = new Point(0, 0);
             this.setting = setting;
@@ -65,13 +65,13 @@ namespace txte.TextDocument
 
         public string? Path { get; set; }
         public EndOfLineFormat NewLineFormat { get; set; }
-        public bool IsNew => this.Rows.Count == 0;
-        public Row.List Rows { get; }
+        public bool IsNew => this.Lines.Count == 0;
+        public Line.List Lines { get; }
         public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
         public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
         public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public Point Offset { get => this.offset; set => this.offset = value; }
-        public bool IsModified => this.Rows.Any(x => x.IsModified);
+        public bool IsModified => this.Lines.Any(x => x.IsModified);
         public Temporary<IOverlapHilighter> OverlapHilighter { get; } = new ();
 
         readonly Setting setting;
@@ -80,11 +80,11 @@ namespace txte.TextDocument
         Point valuePosition;
         Point offset;
 
-        public void DrawRow(IScreen screen, int docRow)
+        public void DrawLine(IScreen screen, int docLine)
         {
             var render = 
-                (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Rows[docRow])
-                : this.Rows[docRow].Render;
+                (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Lines[docLine])
+                : this.Lines[docLine].Render;
             var clippedLength =
                 (render.GetRenderLength() - this.Offset.X).Clamp(0, screen.Width);
             if (clippedLength > 0)
@@ -92,11 +92,11 @@ namespace txte.TextDocument
                 var clippedRender =
                     render.SubRenderString(this.Offset.X, clippedLength);
 
-                screen.AppendRow(clippedRender.ToStyledStrings());
+                screen.AppendLine(clippedRender.ToStyledStrings());
             }
             else
             {
-                screen.AppendRow("");
+                screen.AppendLine("");
             }
         }
 
@@ -105,22 +105,22 @@ namespace txte.TextDocument
             if (this.Path == null) return;
 
             using var file = new StreamWriter(this.Path, false, Encoding.UTF8);
-            int rowCount = 0;
-            foreach (var row in this.Rows)
+            int lineCount = 0;
+            foreach (var line in this.Lines)
             {
-                row.Establish(x => file.Write(x));
-                if (rowCount != this.Rows.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
-                rowCount++;
+                line.Establish(x => file.Write(x));
+                if (lineCount != this.Lines.Count - 1) { file.Write(this.NewLineFormat.Sequence); }
+                lineCount++;
             }
         }
 
         public void InsertChar(char c)
         {
-            if (this.valuePosition.Y == this.Rows.Count)
+            if (this.valuePosition.Y == this.Lines.Count)
             {
-                this.Rows.Add(new Row(this.setting, ""));
+                this.Lines.Add(new Line(this.setting, ""));
             }
-            this.Rows[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
+            this.Lines[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
             this.MoveRight();
         }
 
@@ -128,23 +128,23 @@ namespace txte.TextDocument
         {
             if (this.valuePosition.X == 0)
             {
-                // it condition contains that case: this.valuePosition.Y == this.Rows.Count.
-                this.Rows.Insert(this.ValuePosition.Y, new Row(this.setting, "", isNewLine: true));
+                // it condition contains that case: this.valuePosition.Y == this.Lines.Count.
+                this.Lines.Insert(this.ValuePosition.Y, new Line(this.setting, "", isNewLine: true));
             }
             else
             {
-                this.Rows.Insert(
+                this.Lines.Insert(
                     this.ValuePosition.Y + 1,
-                    new Row(
+                    new Line(
                         this.setting,
-                        this.Rows[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
+                        this.Lines[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
                         isNewLine: true
                     )
                 );
-                this.Rows[this.ValuePosition.Y] =
-                    new Row(
+                this.Lines[this.ValuePosition.Y] =
+                    new Line(
                         this.setting,
-                        this.Rows[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
+                        this.Lines[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
                         isNewLine: true
                     );
             }
@@ -165,7 +165,7 @@ namespace txte.TextDocument
                 {
                     // Do nothing if at the start of file.
                 }
-                else if (position.Y == this.Rows.Count)
+                else if (position.Y == this.Lines.Count)
                 {
                     // Only back cursor if at the end of file.
                     // Maybe this condition cannot be met.
@@ -173,26 +173,26 @@ namespace txte.TextDocument
                 else
                 {
                     // Delete new line of previous line
-                    this.Rows[position.Y - 1] =
-                        new Row(
+                    this.Lines[position.Y - 1] =
+                        new Line(
                             this.setting,
-                            this.Rows[position.Y - 1].Value + this.Rows[position.Y].Value,
+                            this.Lines[position.Y - 1].Value + this.Lines[position.Y].Value,
                             isNewLine: true
                         );
-                    this.Rows.RemoveAt(position.Y);
+                    this.Lines.RemoveAt(position.Y);
                 }
             }
             else
             {
-                this.Rows[position.Y].BackSpace(position.X);
+                this.Lines[position.Y].BackSpace(position.X);
             }
         }
 
         public void DeleteChar()
         {
             if (this.IsNew) { return; }
-            if (this.valuePosition.Y == this.Rows.Count - 1
-                && this.valuePosition.X == this.Rows[^1].Value.Length)
+            if (this.valuePosition.Y == this.Lines.Count - 1
+                && this.valuePosition.X == this.Lines[^1].Value.Length)
             {
                 return;
             }
@@ -210,19 +210,19 @@ namespace txte.TextDocument
             else if (this.valuePosition.Y > 0)
             {
                 this.valuePosition.Y--;
-                if (this.valuePosition.Y < this.Rows.Count)
+                if (this.valuePosition.Y < this.Lines.Count)
                 {
-                    this.valuePosition.X = this.Rows[this.valuePosition.Y].Value.Length;
+                    this.valuePosition.X = this.Lines[this.valuePosition.Y].Value.Length;
                 }
             }
             this.ClampPosition();
         }
         public void MoveRight()
         {
-            if (this.valuePosition.Y < this.Rows.Count)
+            if (this.valuePosition.Y < this.Lines.Count)
             {
-                var row = this.Rows[this.valuePosition.Y];
-                if (this.valuePosition.X < row.Value.Length)
+                var line = this.Lines[this.valuePosition.Y];
+                if (this.valuePosition.X < line.Value.Length)
                 {
                     this.valuePosition.X++;
                 }
@@ -245,7 +245,7 @@ namespace txte.TextDocument
         }
         public void MoveDown()
         {
-            if (this.valuePosition.Y < this.Rows.Count - 1) { this.valuePosition.Y++; }
+            if (this.valuePosition.Y < this.Lines.Count - 1) { this.valuePosition.Y++; }
             this.ClampPosition();
         }
         void ClampPosition()
@@ -255,16 +255,16 @@ namespace txte.TextDocument
                 this.valuePosition.X = 0;
                 this.valuePosition.Y = 0;
             }
-            else if (this.valuePosition.Y < this.Rows.Count)
+            else if (this.valuePosition.Y < this.Lines.Count)
             {
-                var row = this.Rows[this.valuePosition.Y];
-                if (this.valuePosition.X > row.Value.Length) { this.valuePosition.X = row.Value.Length; }
+                var line = this.Lines[this.valuePosition.Y];
+                if (this.valuePosition.X > line.Value.Length) { this.valuePosition.X = line.Value.Length; }
             }
             else
             {
-                this.valuePosition.Y = this.Rows.Count - 1;
-                var row = this.Rows[this.valuePosition.Y];
-                this.valuePosition.X = row.Value.Length;
+                this.valuePosition.Y = this.Lines.Count - 1;
+                var line = this.Lines[this.valuePosition.Y];
+                this.valuePosition.X = line.Value.Length;
             }
         }
 
@@ -277,9 +277,9 @@ namespace txte.TextDocument
         }
         public void MoveDown(int repeat)
         {
-            if (this.valuePosition.Y > this.Rows.Count)
+            if (this.valuePosition.Y > this.Lines.Count)
             {
-                this.valuePosition.Y = this.Rows.Count;
+                this.valuePosition.Y = this.Lines.Count;
             }
             for (int i = 0; i < repeat; i++)
             {
@@ -293,14 +293,14 @@ namespace txte.TextDocument
         }
         public void MoveEnd()
         {
-            if (this.valuePosition.Y < this.Rows.Count)
+            if (this.valuePosition.Y < this.Lines.Count)
             {
-                this.valuePosition.X = this.Rows[this.valuePosition.Y].Value.Length;
+                this.valuePosition.X = this.Lines[this.valuePosition.Y].Value.Length;
             }
             else
             {
                 this.valuePosition.X = 0;
-                this.valuePosition.Y = this.Rows.Count;
+                this.valuePosition.Y = this.Lines.Count;
             }
         }
 
@@ -323,11 +323,11 @@ namespace txte.TextDocument
         }
         public void MoveEndOfFile()
         {
-            if (this.Rows.Count > 0)
+            if (this.Lines.Count > 0)
             {
-                var lastRowIndex = this.Rows.Count - 1;
-                this.valuePosition.X = this.Rows[lastRowIndex].Value.Length;
-                this.valuePosition.Y = lastRowIndex;
+                var lastLineIndex = this.Lines.Count - 1;
+                this.valuePosition.X = this.Lines[lastLineIndex].Value.Length;
+                this.valuePosition.Y = lastLineIndex;
             }
             else
             {
@@ -340,14 +340,14 @@ namespace txte.TextDocument
         {
             this.renderPositionX = 0;
             int overshoot = 0;
-            if (this.valuePosition.Y < this.Rows.Count)
+            if (this.valuePosition.Y < this.Lines.Count)
             {
                 this.renderPositionX =
-                    this.Rows[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X);
-                if (this.valuePosition.X < this.Rows[this.valuePosition.Y].Value.Length)
+                    this.Lines[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X);
+                if (this.valuePosition.X < this.Lines[this.valuePosition.Y].Value.Length)
                 {
                     overshoot =
-                        this.Rows[this.valuePosition.Y].Value[this.valuePosition.X]
+                        this.Lines[this.valuePosition.Y].Value[this.valuePosition.X]
                         .GetEastAsianWidth(this.setting.AmbiguousCharIsFullWidth) - 1;
                 }
             }

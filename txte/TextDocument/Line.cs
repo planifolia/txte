@@ -20,7 +20,11 @@ namespace txte.TextDocument
         public string Value
         {
             get => this.value;
-            set => (this.value, this.IsUpdated) = (value, true);
+            set 
+            {
+                this.value = value;
+                this.IsUpdated = true;
+            }
         }
 
         string value;
@@ -135,25 +139,25 @@ namespace txte.TextDocument
         public ImmutableSortedSet<ColorSpan> Colors;
     }
 
-    class Row
+    class Line
     {
-        public class List : List<Row>
+        public class List : List<Line>
         {
-            public new Row this[int index]
+            public new Line this[int index]
             {
                 get {
-                    var row = base[index];
-                    row.Index = index;
-                    return row;
+                    var line = base[index];
+                    line.Index = index;
+                    return line;
                 }
                 set => base[index] = value;
             }
         }
 
-        public Row(Setting setting, string value) : this(setting, value, false) { }
-        public Row(Setting setting, string value, bool isNewLine)
+        public Line(Setting setting, string value) : this(setting, value, false) { }
+        public Line(Setting setting, string value, bool isNewLine)
         {
-            // Index is set by Row.List
+            // Index is set by Line.List
             this.Index = -1;
 
             this.setting = setting;
