@@ -8,7 +8,7 @@ using txte.TextDocument;
 
 namespace txte.Prompts
 {
-    class FindingHilighter : IOverlapHilighter, IDisposable
+    class FindingHilighter : IOverlapHilighter
     {
         public FindingHilighter(TextFinder finder) => this.finder = finder;
 
@@ -25,130 +25,92 @@ namespace txte.Prompts
                 {
                     var boundaries = row.Boundaries;
                     return new ColorSpan(
-                        ((this.finder.CurrentMatch.X == x && this.finder.CurrentMatch.Y == row.Index) ? ColorSet.CurrentFound : ColorSet.Found),
+                        ((this.finder.CurrentMatch is {} found && found.X == x && found.Y == row.Index) ? ColorSet.CurrentFound : ColorSet.Found),
                         new Range(boundaries[x], boundaries[x + this.finder.Current.Length])
                     );
                 })
                 .ToList();
             return row.Render.Overlay(new Coloring(founds));
         }
-
-        public void Dispose()
-        {
-            // only to represent that this refers to an IDisposable object
-        }
     }
 
-    class TextFinder : IDisposable
+    class TextFinder
     {
         const int NOT_FOUND = -1;
-        const int FORWARD = 1;
-        const int BACKWORD = -1;
-
-        public TextFinder(FindPrompt prompt, IDocument document)
+        enum Direction
         {
-            this.prompt = prompt;
-            this.prompt.FindFirst += this.FindFirst;
-            this.prompt.FindNext += this.FindNext;
-            this.prompt.FindPrevious += this.FindPrevious;
-            this.prompt.Cancel += this.RestorePosition;
+            Initial,
+            Forword,
+            Backword,
+        }
 
-            this.document = document;
-            this.savedPosition = this.document.ValuePosition;
-            this.savedOffset = this.document.Offset;
+        public TextFinder(Row.List rows)
+        {
+            this.rows = rows;
 
             this.Current = "";
-            this.CurrentMatch = savedPosition;
+            this.CurrentMatch = null;
         }
+
         public string Current { get; private set; }
-        public Point CurrentMatch { get; private set; }
+        public Point? CurrentMatch { get; private set; }
 
-        readonly FindPrompt prompt;
-        readonly IDocument document;
-        readonly Point savedPosition;
-        readonly Point savedOffset;
-        private bool disposedValue;
+        readonly Row.List rows;
 
-        public void FindFirst(string query)
+        public Point? Find(string query) => this.CurrentMatch = this.Find(query, new Point(0, 0));
+
+        public Point? Find(string query, Point from)
         {
             this.Current = query;
-            this.document.ValuePosition = this.CurrentMatch = this.FindPosition(FORWARD, this.savedPosition);
+            return this.CurrentMatch = this.FindPosition(Direction.Initial, from);
         }
 
-        public void FindNext() =>
-            this.document.ValuePosition = this.CurrentMatch = this.FindPosition(FORWARD, this.CurrentMatch);
-        public void FindPrevious() =>
-            this.document.ValuePosition = this.CurrentMatch = this.FindPosition(BACKWORD, this.CurrentMatch);
+        public Point? FindNext() => this.CurrentMatch = this.FindPosition(Direction.Forword, this.CurrentMatch);
 
-        Point FindPosition(int direction, Point lastMatch)
+        public Point? FindPrevious() => this.CurrentMatch = this.FindPosition(Direction.Backword, this.CurrentMatch);
+
+        Point? FindPosition(Direction direction, Point? lastMatch)
         {
-            var docRows = this.document.Rows;
+            // When the query string is not found in this document, ignore FindNext() / FindPrevious()
+            if (!lastMatch.HasValue) return null;
+
+            var docRows = this.rows;
             var query = this.Current;
-            
-            var findingCol = lastMatch.X;
-            var findingRow = lastMatch.Y;
+
+            int findingCol = lastMatch.Value.X;
+            int findingRow = lastMatch.Value.Y;
+
+            if (direction == Direction.Initial)
+            {
+                findingCol = docRows[findingRow].Value.IndexOf(query, findingCol);
+                if (findingCol != NOT_FOUND) return new Point(findingCol, findingRow);
+            }
 
             // for round trip to the rest part of the same line
             for (var i = 0; i < docRows.Count + 1; i++)
             {
                 if (findingCol == NOT_FOUND)
                 {
-                    findingRow += direction;
-
-                    // wrap arround at the start / end of file
-                    if (findingRow == -1)
-                    {
-                        findingRow = docRows.Count - 1;
-                    }
-                    else if (findingRow == docRows.Count)
-                    {
-                        findingRow = 0;
-                    }
-
-                    if (direction == FORWARD)
-                    {
-                        findingCol = 0;
-                    }
-                    else
-                    {
-                        findingCol = docRows[findingRow].Value.Length - 1;
-                    }
+                    (findingRow, findingCol) = MoveLine(findingRow, findingCol, direction, docRows);
                 }
                 else
                 {
-                    findingCol += (direction == FORWARD) ? query.Length : -1;
-
+                    findingCol += (direction != Direction.Backword) ? query.Length : -1;
                     // move from the start / end of line to next line
                     if (findingCol == -1 || findingCol == docRows[findingRow].Value.Length)
                     {
-                        findingRow += direction;
-
-                        // wrap arround at the start / end of file
-                        if (findingRow == -1)
-                        {
-                            findingRow = docRows.Count - 1;
-                        }
-                        else if (findingRow == docRows.Count)
-                        {
-                            findingRow = 0;
-                        }
-
-                        if (direction == FORWARD)
-                        {
-                            findingCol = 0;
-                        }
-                        else
-                        {
-                            findingCol = docRows[findingRow].Value.Length - 1;
-                        }
+                        (findingRow, findingCol) = MoveLine(findingRow, findingCol, direction, docRows);
                     }
                 }
+
+                // if the line is empty, the query string cannot be found
                 if (docRows[findingRow].Value.Length == 0)
                 {
                     findingCol = NOT_FOUND;
                     continue;
                 }
-                if (direction == FORWARD)
+
+                if (direction != Direction.Backword)
                 {
                     findingCol = docRows[findingRow].Value.IndexOf(query, findingCol);
                 }
@@ -160,59 +122,57 @@ namespace txte.Prompts
                         .Where(x => x <= findingCol)
                         .DefaultIfEmpty(NOT_FOUND).Max();
                 }
-                if (findingCol != NOT_FOUND)
-                {
-                    return new Point(findingCol, findingRow);
-                }
+                if (findingCol != NOT_FOUND) return new Point(findingCol, findingRow);
             }
-            return lastMatch;
-        }
+            return null;
 
-        public void RestorePosition()
-        {
-            // restore cursor position
-            this.document.ValuePosition = this.savedPosition;
-            this.document.Offset = this.savedOffset;
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
+            static (int, int) MoveLine(int findingRow, int findingCol, Direction direction, Row.List docRows)
             {
-                if (disposing)
+                if (direction != Direction.Backword)
                 {
-                    this.prompt.FindFirst -= this.FindFirst;
-                    this.prompt.FindNext -= this.FindNext;
-                    this.prompt.FindPrevious -= this.FindPrevious;
-                    this.prompt.Cancel -= this.RestorePosition;
-                }
-                disposedValue = true;
-            }
-        }
+                    findingRow++;
+                    // wrap arround at the start / end of file
+                    if (findingRow >= docRows.Count)
+                    {
+                        findingRow = 0;
+                    }
 
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
+                    findingCol = 0;
+                }
+                else
+                {
+                    findingRow--;
+                    // wrap arround at the start / end of file
+                    if (findingRow < 0)
+                    {
+                        findingRow = docRows.Count - 1;
+                    }
+
+                    findingCol = docRows[findingRow].Value.Length - 1;
+                }
+
+                return (findingRow, findingCol);
+            }
         }
     }
 
     class FindPrompt : IPrompt, IPrompt<string>
     {
 
-        public FindPrompt(string message)
+        public FindPrompt(string message, IDocument document, TextFinder finder)
         {
             this.prompt = new InputPrompt(message);
+            this.document = document;
+            this.savedPosition = this.document.ValuePosition;
+            this.savedOffset = this.document.Offset;
+            this.finder = finder;
         }
 
-        public event Action<string>? FindFirst;
-        public event Action? FindNext;
-        public event Action? FindPrevious;
-        public event Action? Cancel;
-        public event Action? Confirm;
-
-
         readonly InputPrompt prompt;
+        readonly IDocument document;
+        readonly Point savedPosition;
+        readonly Point savedOffset;
+        readonly TextFinder finder;
 
         public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
         {
@@ -220,13 +180,23 @@ namespace txte.Prompts
             {
                 // Search Forward
                 case { Key: ConsoleKey.Tab, Modifiers: (ConsoleModifiers)0 }:
-                    this.FindNext?.Invoke();
-                    return ModalNeedsRefreash.Default;
+                {
+                        if (this.finder.FindNext() is { } found)
+                        {
+                            this.document.ValuePosition = found;
+                        }
+                        return ModalNeedsRefreash.Default;
+                }
 
                 // Search Backward
                 case { Key: ConsoleKey.Tab, Modifiers: ConsoleModifiers.Shift }:
-                    this.FindPrevious?.Invoke();
+                {
+                    if (this.finder.FindPrevious() is { } found)
+                    {
+                        this.document.ValuePosition = found;
+                    }
                     return ModalNeedsRefreash.Default;
+                }
 
                 default:
                     break;
@@ -236,24 +206,33 @@ namespace txte.Prompts
 
             if (baseResult is ModalOk<string> result)
             {
-                this.Confirm?.Invoke();
                 return ModalOk.Create(result.Result);
             }
             else if (baseResult is IModalRunning)
             {
-                this.FindFirst?.Invoke(this.prompt.Current);
+                if (this.finder.Find(this.prompt.Current, this.savedPosition)  is { } found)
+                {
+                    this.document.ValuePosition = found;
+                }
                 return ModalNeedsRefreash.Default;
             }
             else if (baseResult is IModalCancel)
             {
                 // restore cursor position
-                this.Cancel?.Invoke();
+                this.RestorePosition();
                 return ModalCancel.Default;
             }
             else
             {
                 return ModalUnhandled.Default;
             }
+        }
+
+        public void RestorePosition()
+        {
+            // restore cursor position
+            this.document.ValuePosition = this.savedPosition;
+            this.document.Offset = this.savedOffset;
         }
 
         public IEnumerable<StyledString> ToStyledString() =>

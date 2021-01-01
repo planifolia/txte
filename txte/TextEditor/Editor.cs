@@ -332,30 +332,31 @@ namespace txte.TextEditor
 
         async Task<ModalProcessResult<TResult>> Prompt<TResult>(IPrompt<TResult> prompt)
         {
-            using var _ = this.prompt.SetTemporary(prompt);
-
-            this.RefreshScreen(0);
-            await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
+            using (this.prompt.SetTemporary(prompt))
             {
-                if (eventType == EventType.Timeout)
+                this.RefreshScreen(0);
+                await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
                 {
-                    this.FadeMessage();
-                    continue;
-                }
+                    if (eventType == EventType.Timeout)
+                    {
+                        this.FadeMessage();
+                        continue;
+                    }
 
-                var state = prompt.ProcessKey(keyInfo);
-                if (state is IModalOk || state is IModalCancel)
-                {
-                    return state;
-                }
+                    var state = prompt.ProcessKey(keyInfo);
+                    if (state is IModalOk || state is IModalCancel)
+                    {
+                        return state;
+                    }
 
-                if (state is IModalNeedsRefreash)
-                {
-                    this.RefreshScreen(0);
-                }
-                else
-                {
-                    this.RefreshScreen(this.editArea.Height);
+                    if (state is IModalNeedsRefreash)
+                    {
+                        this.RefreshScreen(0);
+                    }
+                    else
+                    {
+                        this.RefreshScreen(this.editArea.Height);
+                    }
                 }
             }
 
@@ -366,35 +367,36 @@ namespace txte.TextEditor
 
         private async Task<ProcessResult> OpenMenu()
         {
-            using var _ = this.menu.ShowWhileModal();
-
-            using var message =
-                new TemporaryMessage(ColoredString.Concat(this.setting,
-                    ("hint: You can omit ", ColorSet.OutOfBounds),
-                    ("Crtl", ColorSet.KeyExpression),
-                    (" on the menu screen", ColorSet.OutOfBounds)
-                ));
-            this.message = message;
-
-            this.RefreshScreen(0);
-
-            await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
+            using (this.menu.ShowWhileModal())
             {
-                if (eventType == EventType.Timeout)
-                {
-                    this.FadeMessage();
-                    continue;
-                }
-                if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
-
-                if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
-                {
-                    message.Expire();
-                    this.menu.Hide();
-                    return await function();
-                }
+                using var message =
+                    new TemporaryMessage(ColoredString.Concat(this.setting,
+                        ("hint: You can omit ", ColorSet.OutOfBounds),
+                        ("Crtl", ColorSet.KeyExpression),
+                        (" on the menu screen", ColorSet.OutOfBounds)
+                    ));
+                this.message = message;
 
                 this.RefreshScreen(0);
+
+                await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
+                {
+                    if (eventType == EventType.Timeout)
+                    {
+                        this.FadeMessage();
+                        continue;
+                    }
+                    if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
+
+                    if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
+                    {
+                        message.Expire();
+                        this.menu.Hide();
+                        return await function();
+                    }
+
+                    this.RefreshScreen(0);
+                }
             }
 
             // Maybe Console is dead.
@@ -529,12 +531,12 @@ namespace txte.TextEditor
                 ));
             this.message = message;
 
-            var prompt = new FindPrompt("Search:");
-            using var finder = new TextFinder(prompt, this.document);
-            using var highlighter = new FindingHilighter(finder);
-            using var _ = this.document.OverlapHilighter.SetTemporary(highlighter);
+            var finder = new TextFinder(this.document.Rows);
 
-            await this.Prompt(prompt);
+            using (this.document.OverlapHilighter.SetTemporary(new FindingHilighter(finder)))
+            {
+                await this.Prompt(new FindPrompt("Search:", this.document, finder));
+            }
 
             return ProcessResult.Running;
         }
