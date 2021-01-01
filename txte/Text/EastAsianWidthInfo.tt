@@ -70,7 +70,7 @@ namespace txte.Text
     static class EastAsianWidthInfo
     {
 
-        public static EastAsianWidthTypes GetEastAsianWidthType(this char value)
+        public static EastAsianWidthTypes GetWidthType(this char value)
         {
             // search EAW with binary search
             int low = 0;

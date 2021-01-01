@@ -15,7 +15,7 @@
         public static int GetEastAsianWidth(this char value, bool ambiguousIsFullWidth)
         {
 
-            switch (value.GetEastAsianWidthType())
+            switch (value.GetWidthType())
             {
                 case EastAsianWidthTypes.A:
                     return ambiguousIsFullWidth ? 2 : 1;
