@@ -13,8 +13,8 @@ namespace txte.TextDocument
     interface IDocument
     {
         Line.List Lines { get; }
-        Point ValuePosition { get; set; }
-        Point Offset { get; set; }
+        ValuePosition ValuePosition { get; set; }
+        RenderPosition Offset { get; set; }
     }
 
     interface IOverlapHilighter
@@ -56,8 +56,8 @@ namespace txte.TextDocument
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
             this.Lines = new Line.List { };
-            this.valuePosition = new Point(0, 0);
-            this.offset = new Point(0, 0);
+            this.valuePosition = new (0, 0);
+            this.offset = new (0, 0);
             this.setting = setting;
         }
 
@@ -65,18 +65,18 @@ namespace txte.TextDocument
         public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew => this.Lines.Count == 0;
         public Line.List Lines { get; }
-        public Point Cursor => new Point(this.renderPositionX - this.offset.X, this.valuePosition.Y - this.offset.Y);
-        public Point RenderPosition => new Point(this.renderPositionX, this.valuePosition.Y);
-        public Point ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
-        public Point Offset { get => this.offset; set => this.offset = value; }
+        public RenderPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
+        public RenderPosition RenderPosition => new (this.valuePosition.Line, this.renderPositionColumn);
+        public ValuePosition ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
+        public RenderPosition Offset { get => this.offset; set => this.offset = value; }
         public bool IsModified => this.Lines.Any(x => x.IsModified);
         public Temporary<IOverlapHilighter> OverlapHilighter { get; } = new ();
 
         readonly Setting setting;
 
-        int renderPositionX;
-        Point valuePosition;
-        Point offset;
+        int renderPositionColumn;
+        ValuePosition valuePosition;
+        RenderPosition offset;
 
         public void DrawLine(IScreen screen, int docLine)
         {
@@ -84,11 +84,11 @@ namespace txte.TextDocument
                 (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Lines[docLine])
                 : this.Lines[docLine].Render;
             var clippedLength =
-                (render.GetRenderLength() - this.Offset.X).Clamp(0, screen.Width);
+                (render.GetRenderLength() - this.offset.Column).Clamp(0, screen.Width);
             if (clippedLength > 0)
             {
                 var clippedRender =
-                    render.SubRenderString(this.Offset.X, clippedLength);
+                    render.SubRenderString(this.offset.Column, clippedLength);
 
                 screen.AppendLine(clippedRender.ToStyledStrings());
             }
@@ -114,35 +114,35 @@ namespace txte.TextDocument
 
         public void InsertChar(char c)
         {
-            if (this.valuePosition.Y == this.Lines.Count)
+            if (this.valuePosition.Line == this.Lines.Count)
             {
                 this.Lines.Add(new Line(this.setting, ""));
             }
-            this.Lines[this.valuePosition.Y].InsertChar(c, this.valuePosition.X);
+            this.Lines[this.valuePosition.Line].InsertChar(c, this.valuePosition.Char);
             this.MoveRight();
         }
 
         public void InsertNewLine()
         {
-            if (this.valuePosition.X == 0)
+            if (this.valuePosition.Char == 0)
             {
-                // it condition contains that case: this.valuePosition.Y == this.Lines.Count.
-                this.Lines.Insert(this.ValuePosition.Y, new Line(this.setting, "", isNewLine: true));
+                // it condition contains that case: this.valuePosition.Line == this.Lines.Count.
+                this.Lines.Insert(this.valuePosition.Line, new Line(this.setting, "", isNewLine: true));
             }
             else
             {
                 this.Lines.Insert(
-                    this.ValuePosition.Y + 1,
+                    this.valuePosition.Line + 1,
                     new Line(
                         this.setting,
-                        this.Lines[this.ValuePosition.Y].Value.Substring(this.valuePosition.X),
+                        this.Lines[this.valuePosition.Line].Value.Substring(this.valuePosition.Char),
                         isNewLine: true
                     )
                 );
-                this.Lines[this.ValuePosition.Y] =
+                this.Lines[this.valuePosition.Line] =
                     new Line(
                         this.setting,
-                        this.Lines[this.ValuePosition.Y].Value.Substring(0, this.valuePosition.X),
+                        this.Lines[this.valuePosition.Line].Value.Substring(0, this.valuePosition.Char),
                         isNewLine: true
                     );
             }
@@ -156,14 +156,13 @@ namespace txte.TextDocument
 
             this.MoveLeft();
 
-            if (position.X == 0 && position.Y == 0) { return; }
-            if (position.X == 0)
+            if (position.Char == 0)
             {
-                if (position.Y == 0)
+                if (position.Line == 0)
                 {
                     // Do nothing if at the start of file.
                 }
-                else if (position.Y == this.Lines.Count)
+                else if (position.Line == this.Lines.Count)
                 {
                     // Only back cursor if at the end of file.
                     // Maybe this condition cannot be met.
@@ -171,26 +170,26 @@ namespace txte.TextDocument
                 else
                 {
                     // Delete new line of previous line
-                    this.Lines[position.Y - 1] =
+                    this.Lines[position.Line - 1] =
                         new Line(
                             this.setting,
-                            this.Lines[position.Y - 1].Value + this.Lines[position.Y].Value,
+                            this.Lines[position.Line - 1].Value + this.Lines[position.Line].Value,
                             isNewLine: true
                         );
-                    this.Lines.RemoveAt(position.Y);
+                    this.Lines.RemoveAt(position.Line);
                 }
             }
             else
             {
-                this.Lines[position.Y].BackSpace(position.X);
+                this.Lines[position.Line].BackSpace(position.Char);
             }
         }
 
         public void DeleteChar()
         {
             if (this.IsNew) { return; }
-            if (this.valuePosition.Y == this.Lines.Count - 1
-                && this.valuePosition.X == this.Lines[^1].Value.Length)
+            if (this.valuePosition.Line == this.Lines.Count - 1
+                && this.valuePosition.Char == this.Lines[^1].Value.Length)
             {
                 return;
             }
@@ -201,68 +200,68 @@ namespace txte.TextDocument
 
         public void MoveLeft()
         {
-            if (this.valuePosition.X > 0)
+            if (this.valuePosition.Char > 0)
             {
-                this.valuePosition.X--;
+                this.valuePosition.Char--;
             }
-            else if (this.valuePosition.Y > 0)
+            else if (this.valuePosition.Line > 0)
             {
-                this.valuePosition.Y--;
-                if (this.valuePosition.Y < this.Lines.Count)
+                this.valuePosition.Line--;
+                if (this.valuePosition.Line < this.Lines.Count)
                 {
-                    this.valuePosition.X = this.Lines[this.valuePosition.Y].Value.Length;
+                    this.valuePosition.Char = this.Lines[this.valuePosition.Line].Value.Length;
                 }
             }
             this.ClampPosition();
         }
         public void MoveRight()
         {
-            if (this.valuePosition.Y < this.Lines.Count)
+            if (this.valuePosition.Line < this.Lines.Count)
             {
-                var line = this.Lines[this.valuePosition.Y];
-                if (this.valuePosition.X < line.Value.Length)
+                var line = this.Lines[this.valuePosition.Line];
+                if (this.valuePosition.Char < line.Value.Length)
                 {
-                    this.valuePosition.X++;
+                    this.valuePosition.Char++;
                 }
                 else
                 {
-                    this.valuePosition.X = 0;
-                    this.valuePosition.Y++;
+                    this.valuePosition.Char = 0;
+                    this.valuePosition.Line++;
                 }
             }
             else
             {
-                this.valuePosition.X = 0;
+                this.valuePosition.Char = 0;
             }
             this.ClampPosition();
         }
         public void MoveUp()
         {
-            if (this.valuePosition.Y > 0) { this.valuePosition.Y--; }
+            if (this.valuePosition.Line > 0) { this.valuePosition.Line--; }
             this.ClampPosition();
         }
         public void MoveDown()
         {
-            if (this.valuePosition.Y < this.Lines.Count - 1) { this.valuePosition.Y++; }
+            if (this.valuePosition.Line < this.Lines.Count - 1) { this.valuePosition.Line++; }
             this.ClampPosition();
         }
         void ClampPosition()
         {
             if (this.IsNew)
             {
-                this.valuePosition.X = 0;
-                this.valuePosition.Y = 0;
+                this.valuePosition.Char = 0;
+                this.valuePosition.Line = 0;
             }
-            else if (this.valuePosition.Y < this.Lines.Count)
+            else if (this.valuePosition.Line < this.Lines.Count)
             {
-                var line = this.Lines[this.valuePosition.Y];
-                if (this.valuePosition.X > line.Value.Length) { this.valuePosition.X = line.Value.Length; }
+                var line = this.Lines[this.valuePosition.Line];
+                if (this.valuePosition.Char > line.Value.Length) { this.valuePosition.Char = line.Value.Length; }
             }
             else
             {
-                this.valuePosition.Y = this.Lines.Count - 1;
-                var line = this.Lines[this.valuePosition.Y];
-                this.valuePosition.X = line.Value.Length;
+                this.valuePosition.Line = this.Lines.Count - 1;
+                var line = this.Lines[this.valuePosition.Line];
+                this.valuePosition.Char = line.Value.Length;
             }
         }
 
@@ -275,9 +274,9 @@ namespace txte.TextDocument
         }
         public void MoveDown(int repeat)
         {
-            if (this.valuePosition.Y > this.Lines.Count)
+            if (this.valuePosition.Line > this.Lines.Count)
             {
-                this.valuePosition.Y = this.Lines.Count;
+                this.valuePosition.Line = this.Lines.Count;
             }
             for (int i = 0; i < repeat; i++)
             {
@@ -287,84 +286,84 @@ namespace txte.TextDocument
 
         public void MoveHome()
         {
-            this.valuePosition.X = 0;
+            this.valuePosition.Char = 0;
         }
         public void MoveEnd()
         {
-            if (this.valuePosition.Y < this.Lines.Count)
+            if (this.valuePosition.Line < this.Lines.Count)
             {
-                this.valuePosition.X = this.Lines[this.valuePosition.Y].Value.Length;
+                this.valuePosition.Char = this.Lines[this.valuePosition.Line].Value.Length;
             }
             else
             {
-                this.valuePosition.X = 0;
-                this.valuePosition.Y = this.Lines.Count;
+                this.valuePosition.Char = 0;
+                this.valuePosition.Line = this.Lines.Count;
             }
         }
 
         public void MovePageUp(int consoleHeight)
         {
-            this.valuePosition.Y = this.offset.Y;
+            this.valuePosition.Line = this.offset.Line;
             this.MoveUp(consoleHeight);
         }
         public void MovePageDown(int consoleHeight)
         {
-            this.valuePosition.Y = this.offset.Y + consoleHeight - 1;
+            this.valuePosition.Line = this.offset.Line + consoleHeight - 1;
             this.MoveDown(consoleHeight);
 
         }
 
         public void MoveStartOfFile()
         {
-            this.valuePosition.X = 0;
-            this.valuePosition.Y = 0;
+            this.valuePosition.Char = 0;
+            this.valuePosition.Line = 0;
         }
         public void MoveEndOfFile()
         {
             if (this.Lines.Count > 0)
             {
                 var lastLineIndex = this.Lines.Count - 1;
-                this.valuePosition.X = this.Lines[lastLineIndex].Value.Length;
-                this.valuePosition.Y = lastLineIndex;
+                this.valuePosition.Char = this.Lines[lastLineIndex].Value.Length;
+                this.valuePosition.Line = lastLineIndex;
             }
             else
             {
-                this.valuePosition.X = 0;
-                this.valuePosition.Y = 0;
+                this.valuePosition.Char = 0;
+                this.valuePosition.Line = 0;
             }
         }
 
         public void UpdateOffset(Size editArea)
         {
-            this.renderPositionX = 0;
+            this.renderPositionColumn = 0;
             int overshoot = 0;
-            if (this.valuePosition.Y < this.Lines.Count)
+            if (this.valuePosition.Line < this.Lines.Count)
             {
-                this.renderPositionX =
-                    this.Lines[this.valuePosition.Y].ValueXToRenderX(this.ValuePosition.X);
-                if (this.valuePosition.X < this.Lines[this.valuePosition.Y].Value.Length)
+                this.renderPositionColumn =
+                    this.Lines[this.valuePosition.Line].ValueXToRenderX(this.valuePosition.Char);
+                if (this.valuePosition.Char < this.Lines[this.valuePosition.Line].Value.Length)
                 {
                     overshoot =
-                        this.Lines[this.valuePosition.Y].Value[this.valuePosition.X]
+                        this.Lines[this.valuePosition.Line].Value[this.valuePosition.Char]
                         .GetEastAsianWidth(this.setting.AmbiguousCharIsFullWidth) - 1;
                 }
             }
 
-            if (this.valuePosition.Y < this.offset.Y)
+            if (this.valuePosition.Line < this.offset.Line)
             {
-                this.offset.Y = this.valuePosition.Y;
+                this.offset.Line = this.valuePosition.Line;
             }
-            if (this.valuePosition.Y >= this.offset.Y + editArea.Height)
+            if (this.valuePosition.Line >= this.offset.Line + editArea.Height)
             {
-                this.offset.Y = this.valuePosition.Y - editArea.Height + 1;
+                this.offset.Line = this.valuePosition.Line - editArea.Height + 1;
             }
-            if (this.renderPositionX < this.offset.X)
+            if (this.renderPositionColumn < this.offset.Column)
             {
-                this.offset.X = this.renderPositionX;
+                this.offset.Column = this.renderPositionColumn;
             }
-            if (this.renderPositionX >= this.offset.X + editArea.Width)
+            if (this.renderPositionColumn >= this.offset.Column + editArea.Width)
             {
-                this.offset.X = this.renderPositionX - editArea.Width + 1 + overshoot;
+                this.offset.Column = this.renderPositionColumn - editArea.Width + 1 + overshoot;
             }
         }
     }

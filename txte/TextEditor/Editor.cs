@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using txte.Settings;
@@ -11,7 +12,6 @@ using txte.Text;
 using txte.ConsoleInterface;
 using txte.TextDocument;
 using txte.Prompts;
-using System.Reflection;
 
 namespace txte.TextEditor
 {
@@ -171,7 +171,7 @@ namespace txte.TextEditor
                 from.AtMin(0),
                 this.setting,
                 this.RenderScreen,
-                this.document.Cursor);
+                (Point)this.document.Cursor);
         }
 
         void RenderScreen(IScreen screen, int from)
@@ -185,12 +185,12 @@ namespace txte.TextEditor
         void DrawEditorLines(IScreen screen, int from)
         {
             bool ambiguousSetting = this.setting.AmbiguousCharIsFullWidth;
-            for (int y = from; y < this.editArea.Height; y++)
+            for (int line = from; line < this.editArea.Height; line++)
             {
-                var docLine = y + this.document.Offset.Y;
+                var docLine = line + this.document.Offset.Line;
                 if (this.menu.IsShown)
                 {
-                    this.DrawMenu(screen, y);
+                    this.DrawMenu(screen, line);
                 }
                 else if (docLine < this.document.Lines.Count)
                 {
@@ -198,7 +198,7 @@ namespace txte.TextEditor
                 }
                 else
                 {
-                    this.DrawOutofBounds(screen, y);
+                    this.DrawOutofBounds(screen, line);
                 }
             }
         }
@@ -208,20 +208,20 @@ namespace txte.TextEditor
             this.document.DrawLine(screen, docLine);
         }
 
-        void DrawMenu(IScreen screen, int y)
+        void DrawMenu(IScreen screen, int line)
         {
             var keyJoiner = " + ";
             var separator = "  ";
             var titleLineCount = 2;
 
-            if (y - titleLineCount >= this.menu.KeyBinds.KeyBinds.Count)
+            if (line - titleLineCount >= this.menu.KeyBinds.KeyBinds.Count)
             {
                 screen.AppendLine(new[]
                 {
                     new StyledString("~", ColorSet.OutOfBounds),
                 });
             }
-            else if (y == 0)
+            else if (line == 0)
             {
                 var message = "Shortcuts";
                 var messageLength = message.Length;
@@ -233,7 +233,7 @@ namespace txte.TextEditor
                     new StyledString(message, ColorSet.OutOfBounds),
                 });
             }
-            else if (y == 1)
+            else if (line == 1)
             {
                 screen.AppendLine(new[]
                 {
@@ -243,7 +243,7 @@ namespace txte.TextEditor
             }
             else
             {
-                var item = this.menu.KeyBinds.KeyBinds[y - titleLineCount];
+                var item = this.menu.KeyBinds.KeyBinds[line - titleLineCount];
 
                 var leftLength = item.explanation.Length;
                 var rightLength = item.keys.Select(x => x.Length).Sum() + (item.keys.Length - 1) * keyJoiner.Length;
@@ -267,9 +267,9 @@ namespace txte.TextEditor
             }
         }
 
-        void DrawOutofBounds(IScreen screen, int y)
+        void DrawOutofBounds(IScreen screen, int line)
         {
-            if (this.document.IsNew && y == this.editArea.Height / 3)
+            if (this.document.IsNew && line == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = welcome.Length.AtMax(this.console.Width);
@@ -306,7 +306,7 @@ namespace txte.TextEditor
             (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
             var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
-            var positionInfo = $"{this.document.RenderPosition.Y}:{this.document.RenderPosition.X} {this.document.NewLineFormat.Name}";
+            var positionInfo = $"{this.document.RenderPosition.Line}:{this.document.RenderPosition.Column} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
             screen.AppendLine(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });

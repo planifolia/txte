@@ -24,7 +24,7 @@ namespace txte.Prompts
                 {
                     var boundaries = line.Boundaries;
                     return new ColorSpan(
-                        ((this.finder.CurrentMatch is {} found && found.X == x && found.Y == line.Index) ? ColorSet.CurrentFound : ColorSet.Found),
+                        ((this.finder.CurrentMatch is {} found && found.Char == x && found.Line == line.Index) ? ColorSet.CurrentFound : ColorSet.Found),
                         new Range(boundaries[x], boundaries[x + this.finder.Current.Length])
                     );
                 })
@@ -52,23 +52,23 @@ namespace txte.Prompts
         }
 
         public string Current { get; private set; }
-        public Point? CurrentMatch { get; private set; }
+        public ValuePosition? CurrentMatch { get; private set; }
 
         readonly Line.List lines;
 
-        public Point? Find(string query) => this.CurrentMatch = this.Find(query, new Point(0, 0));
+        public ValuePosition? Find(string query) => this.CurrentMatch = this.Find(query, new (0, 0));
 
-        public Point? Find(string query, Point from)
+        public ValuePosition? Find(string query, ValuePosition from)
         {
             this.Current = query;
             return this.CurrentMatch = this.FindPosition(Direction.Initial, from);
         }
 
-        public Point? FindNext() => this.CurrentMatch = this.FindPosition(Direction.Forword, this.CurrentMatch);
+        public ValuePosition? FindNext() => this.CurrentMatch = this.FindPosition(Direction.Forword, this.CurrentMatch);
 
-        public Point? FindPrevious() => this.CurrentMatch = this.FindPosition(Direction.Backword, this.CurrentMatch);
+        public ValuePosition? FindPrevious() => this.CurrentMatch = this.FindPosition(Direction.Backword, this.CurrentMatch);
 
-        Point? FindPosition(Direction direction, Point? lastMatch)
+        ValuePosition? FindPosition(Direction direction, ValuePosition? lastMatch)
         {
             // When the query string is not found in this document, ignore FindNext() / FindPrevious()
             if (!lastMatch.HasValue) return null;
@@ -76,81 +76,78 @@ namespace txte.Prompts
             var docLines = this.lines;
             var query = this.Current;
 
-            int findingChar = lastMatch.Value.X;
-            int findingLine = lastMatch.Value.Y;
+            var finding = lastMatch.Value;
 
             if (direction == Direction.Initial)
             {
-                findingChar = docLines[findingLine].Value.IndexOf(query, findingChar);
-                if (findingChar != NOT_FOUND) return new Point(findingChar, findingLine);
+                finding.Char = docLines[finding.Line].Value.IndexOf(query, finding.Char);
+                if (finding.Char != NOT_FOUND) return finding;
             }
 
             // for round trip to the rest part of the same line
             for (var i = 0; i < docLines.Count + 1; i++)
             {
-                if (findingChar == NOT_FOUND)
+                if (finding.Char == NOT_FOUND)
                 {
-                    (findingLine, findingChar) = MoveLine(findingLine, findingChar, direction, docLines);
+                    MoveLine(ref finding, direction, docLines);
                 }
                 else
                 {
-                    findingChar += (direction != Direction.Backword) ? query.Length : -1;
+                    finding.Char += (direction != Direction.Backword) ? query.Length : -1;
                     // move from the start / end of line to next line
-                    if (findingChar == -1 || findingChar == docLines[findingLine].Value.Length)
+                    if (finding.Char == -1 || finding.Char == docLines[finding.Line].Value.Length)
                     {
-                        (findingLine, findingChar) = MoveLine(findingLine, findingChar, direction, docLines);
+                        MoveLine(ref finding, direction, docLines);
                     }
                 }
 
                 // if the line is empty, the query string cannot be found
-                if (docLines[findingLine].Value.Length == 0)
+                if (docLines[finding.Line].Value.Length == 0)
                 {
-                    findingChar = NOT_FOUND;
+                    finding.Char = NOT_FOUND;
                     continue;
                 }
 
                 if (direction != Direction.Backword)
                 {
-                    findingChar = docLines[findingLine].Value.IndexOf(query, findingChar);
+                    finding.Char = docLines[finding.Line].Value.IndexOf(query, finding.Char);
                 }
                 else
                 {
-                    findingChar =
-                        docLines[findingLine].Value
+                    finding.Char =
+                        docLines[finding.Line].Value
                         .IndicesOf(query, allowOverlap: false)
-                        .Where(x => x <= findingChar)
+                        .Where(x => x <= finding.Char)
                         .DefaultIfEmpty(NOT_FOUND).Max();
                 }
-                if (findingChar != NOT_FOUND) return new Point(findingChar, findingLine);
+                if (finding.Char != NOT_FOUND) return finding;
             }
             return null;
 
-            static (int, int) MoveLine(int findingLine, int findingChar, Direction direction, Line.List docLines)
+            static void MoveLine(ref ValuePosition finding, Direction direction, Line.List docLines)
             {
                 if (direction != Direction.Backword)
                 {
-                    findingLine++;
+                    finding.Line++;
                     // wrap arround at the start / end of file
-                    if (findingLine >= docLines.Count)
+                    if (finding.Line >= docLines.Count)
                     {
-                        findingLine = 0;
+                        finding.Line = 0;
                     }
 
-                    findingChar = 0;
+                    finding.Char = 0;
                 }
                 else
                 {
-                    findingLine--;
+                    finding.Line--;
                     // wrap arround at the start / end of file
-                    if (findingLine < 0)
+                    if (finding.Line < 0)
                     {
-                        findingLine = docLines.Count - 1;
+                        finding.Line = docLines.Count - 1;
                     }
 
-                    findingChar = docLines[findingLine].Value.Length - 1;
+                    finding.Char = docLines[finding.Line].Value.Length - 1;
                 }
-
-                return (findingLine, findingChar);
             }
         }
     }
@@ -169,8 +166,8 @@ namespace txte.Prompts
 
         readonly InputPrompt prompt;
         readonly IDocument document;
-        readonly Point savedPosition;
-        readonly Point savedOffset;
+        readonly ValuePosition savedPosition;
+        readonly RenderPosition savedOffset;
         readonly TextFinder finder;
 
         public ModalProcessResult<string> ProcessKey(ConsoleKeyInfo keyInfo)
