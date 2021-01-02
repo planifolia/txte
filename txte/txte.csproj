@@ -9,7 +9,7 @@
 
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>txte</ToolCommandName>
-    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <RepositoryUrl>https://github.com/planifolia/txte</RepositoryUrl>
   </PropertyGroup>
 
 </Project>
