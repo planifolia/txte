@@ -18,7 +18,7 @@ jobs:
       uses: Rebel028/publish-nuget@v2.6.0
       with:
         PROJECT_FILE_PATH: txte/txte.csproj
-        NUGET_SOURCE: https://nuget.pkg.github.com/planifolia/index.json
+        NUGET_SOURCE: https://nuget.pkg.github.com/planifolia
         VERSION_REGEX: '^\s*<Version>(.*)<\/Version>\s*$'
         TAG_COMMIT: true
         TAG_FORMAT: 'v*'
