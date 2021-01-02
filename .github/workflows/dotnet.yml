@@ -23,7 +23,7 @@ jobs:
       with:
         PROJECT_FILE_PATH: txte/txte.csproj
         NUGET_SOURCE: https://nuget.pkg.github.com/planifolia/index.json
-        VERSION_REGEX: '^\s*<PackageVersion>(.*)<\/PackageVersion>\s*$'
+        VERSION_REGEX: '^\s*<Version>(.*)<\/Version>\s*$'
         TAG_COMMIT: true
         TAG_FORMAT: 'v*'
         NUGET_KEY: ${{secrets.NUGET_API_KEY}}
