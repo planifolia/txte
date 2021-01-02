@@ -26,13 +26,14 @@ namespace txte.TextDocument
     {
         public static async Task<Document> OpenAsync(string path, Setting setting)
         {
-            var doc = new Document(setting)
-            {
-                Path = path
-            };
-
             using var reader = new StreamReader(path, Encoding.UTF8);
             var text = await reader.ReadToEndAsync();
+
+            var doc = new Document(setting)
+            {
+                IsNew = false,
+                Path = path,
+            };
 
             var newLine = AnyNewLinePattern.Match(text);
             if (newLine.Success)
@@ -55,6 +56,7 @@ namespace txte.TextDocument
         {
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
+            this.IsNew = true;
             this.Lines = new Line.List { };
             this.valuePosition = new (0, 0);
             this.offset = new (0, 0);
@@ -63,7 +65,7 @@ namespace txte.TextDocument
 
         public string? Path { get; set; }
         public EndOfLineFormat NewLineFormat { get; set; }
-        public bool IsNew => this.Lines.Count == 0;
+        public bool IsNew { get; private set; }
         public Line.List Lines { get; }
         public CursorPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
         public RenderPosition RenderPosition => new (this.valuePosition.Line, this.renderPositionColumn);
@@ -114,6 +116,8 @@ namespace txte.TextDocument
 
         public void InsertChar(char c)
         {
+            this.IsNew = false;
+    
             if (this.valuePosition.Line == this.Lines.Count)
             {
                 this.Lines.Add(new Line(this.setting, ""));
@@ -124,6 +128,8 @@ namespace txte.TextDocument
 
         public void InsertNewLine()
         {
+            this.IsNew = false;
+
             if (this.valuePosition.Char == 0)
             {
                 // it condition contains that case: this.valuePosition.Line == this.Lines.Count.
@@ -152,6 +158,8 @@ namespace txte.TextDocument
 
         public void BackSpace()
         {
+            this.IsNew = false;
+
             var position = this.valuePosition;
 
             this.MoveLeft();
@@ -187,7 +195,7 @@ namespace txte.TextDocument
 
         public void DeleteChar()
         {
-            if (this.IsNew) { return; }
+            if (this.Lines.Count == 0) return;
             if (this.valuePosition.Line == this.Lines.Count - 1
                 && this.valuePosition.Char == this.Lines[^1].Value.Length)
             {
@@ -247,7 +255,7 @@ namespace txte.TextDocument
         }
         void ClampPosition()
         {
-            if (this.IsNew)
+            if (this.Lines.Count == 0)
             {
                 this.valuePosition.Char = 0;
                 this.valuePosition.Line = 0;

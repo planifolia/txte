@@ -24,12 +24,12 @@ namespace txte.TextEditor
             .ToString();
 
 
-        public Editor(IConsole console, Setting setting, Document document, Message firstMessage)
+        public Editor(IConsole console, Setting setting)
         {
             this.console = console;
             this.setting = setting;
-            this.document = document;
-            this.message = firstMessage;
+            this.message = new Message(new ColoredString(this.setting, ""));
+            this.document = new Document(this.setting);
             this.menu = new Menu(this.SetupShortcuts());
             this.editKeyBinds = this.SetupEditKeyBinds();
         }
@@ -77,17 +77,39 @@ namespace txte.TextEditor
             }
         }
 
+        public async Task OpenDocumentAsync(string path)
+        {
+            if (!this.document.IsNew) throw
+                new NotImplementedException("Document has already opened and other document is opened");
+
+            try
+            {
+                this.document = await Document.OpenAsync(path, this.setting);
+            }
+            catch (Exception)
+            {
+                this.document = new Document(setting);
+                this.document.Path = path;
+            }
+        }
+
+        public void ShowMessage(Message message) => this.message = message;
+
         KeyBindSet SetupShortcuts() =>
             new KeyBindSet
             {
-                [new KeyBind(new KeyCombination(ConsoleKey.F, false, true), "Find")] =
-                    this.Find,
                 [new KeyBind(new KeyCombination(ConsoleKey.Q, false, true), "Quit")] =
                     this.Quit,
+                [new KeyBind(new KeyCombination(ConsoleKey.O, false, true), "Open")] =
+                    this.Open,
                 [new KeyBind(new KeyCombination(ConsoleKey.S, false, true), "Save")] =
                     this.Save,
                 [new KeyBind(new KeyCombination(ConsoleKey.S, true, true), "Save As")] =
                     this.SaveAs,
+                [new KeyBind(new KeyCombination(ConsoleKey.W, false, true), "Close")] =
+                    this.Close,
+                [new KeyBind(new KeyCombination(ConsoleKey.F, false, true), "Search")] =
+                    this.Find,
                 [new KeyBind(new KeyCombination(ConsoleKey.L, false, true), "Refresh")] =
                     () => this.DelegateTask(this.console.Clear),
                 [new KeyBind(new KeyCombination(ConsoleKey.E, true, true), "Change East Asian Width")] =
@@ -144,14 +166,6 @@ namespace txte.TextEditor
         {
             action();
             return ProcessTaskResult.Running;
-        }
-
-        async Task OpenDocumentAsync(string path)
-        {
-            if (!this.document.IsNew) throw
-                new NotImplementedException("Document has already opened and other document is opened");
-
-            this.document = await Document.OpenAsync(path, this.setting);
         }
 
         void FadeMessage(CursorPosition? cursor)
@@ -302,7 +316,9 @@ namespace txte.TextEditor
         }
         void DrawSatausBar(IScreen screen)
         {
-            var fileName = this.document.Path != null ? Path.GetFileName(this.document.Path) : "[New File]";
+            var fileName =
+                (this.document.Path != null ? Path.GetFileName(this.document.Path) : "")
+                + (this.document.IsNew ? "[New File]" : "");
             var fileNameLength = fileName.Length.AtMax(20);
             (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
@@ -452,33 +468,34 @@ namespace txte.TextEditor
             }
         }
 
+        async Task<ProcessResult> Open()
+        {
+            // tab mode is not supported
+            if (!this.document.IsNew) return ProcessResult.Running;
+
+            var promptInput = await this.Prompt(new InputPrompt("Open:", this.setting));
+            if (promptInput is ModalOk<string>(var path))
+            {
+                await this.OpenDocumentAsync(path);
+            }
+
+            return ProcessResult.Running;
+        }
+
+
         async Task<ProcessResult> Save() =>
             await ((this.document.Path == null) ? this.SaveAs() : this.SaveWithConfirm());
 
         async Task<ProcessResult> SaveAs()
         {
-            using var message =
-                new TemporaryMessage(ColoredString.Concat(this.setting,
-                    ("hint: ", ColorSet.OutOfBounds),
-                    ("Esc", ColorSet.KeyExpression),
-                    (" to cancel", ColorSet.OutOfBounds)
-                ));
-            this.message = message;
-
             var promptInput = await this.Prompt(new InputPrompt("Save as:", this.setting));
-            if (promptInput is ModalOk<string>(var savePath))
+            if (promptInput is ModalOk<string>(var path))
             {
-                this.document.Path = savePath;
+                this.document.Path = path;
                 await this.SaveWithConfirm();
-                return ProcessResult.Running;
             }
-            else
-            {
-                this.message =
-                    new Message(ColoredString.Concat(this.setting,
-                        ("Save is cancelled", ColorSet.OutOfBounds)));
-                return ProcessResult.Running;
-            }
+
+            return ProcessResult.Running;
         }
 
         async Task<ProcessResult> SaveWithConfirm()
@@ -494,11 +511,8 @@ namespace txte.TextEditor
                                 new[] { Choice.No, Choice.Yes }
                             )
                         );
-                    if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.No)
+                    if (!(promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.Yes))
                     {
-                        this.message =
-                            new Message(ColoredString.Concat(this.setting,
-                                ("Save is cancelled", ColorSet.OutOfBounds)));
                         return ProcessResult.Running;
                     }
                 }
@@ -517,13 +531,36 @@ namespace txte.TextEditor
             return ProcessResult.Running;
         }
 
+        async Task<ProcessResult> Close()
+        {
+            if (!this.document.IsModified)
+            {
+                this.document = new Document(this.setting);
+                return ProcessResult.Running;
+            }
+
+            var promptResult =
+                await this.Prompt(
+                    ChoosePrompt.Create(
+                        "File has unsaved changes. Close without saving?",
+                        new[] { Choice.No, Choice.Yes }
+                    )
+                );
+
+            if (promptResult is ModalOk<Choice>(var confirm) && confirm == Choice.Yes)
+            {
+                this.document = new Document(this.setting);
+            }
+
+            return ProcessResult.Running;
+        }
+
         async Task<ProcessResult> Find()
         {
             using var message =
                 new TemporaryMessage(ColoredString.Concat(this.setting,
-                    ("hint: You can omit ", ColorSet.OutOfBounds),
-                    ("Esc", ColorSet.KeyExpression),
-                    (" to cancel, (", ColorSet.OutOfBounds),
+                    ("hint: ", ColorSet.OutOfBounds),
+                    ("(", ColorSet.OutOfBounds),
                     ("Shift", ColorSet.KeyExpression),
                     (" +) ", ColorSet.OutOfBounds),
                     ("Tab", ColorSet.KeyExpression),
@@ -561,9 +598,14 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> SwitchAmbiguousWidth()
         {
+            var estimatedWidth = (this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width";
             using var message =
-                    new TemporaryMessage(ColoredString.Concat(this.setting,
-                        ("hint: Set according to your terminal font. Default is estimated from your terminal", ColorSet.OutOfBounds)));
+                new TemporaryMessage(ColoredString.Concat(this.setting,
+                    (
+                        $"hint: Set according to your terminal font. Default is estimated to {estimatedWidth}",
+                        ColorSet.OutOfBounds
+                    )
+                ));
             this.message = message;
             var modalResult =
                 await this.Prompt(
@@ -573,25 +615,25 @@ namespace txte.TextEditor
                         this.setting.AmbiguousFormat
                     )
                 );
-            if (modalResult is ModalOk<EAWAmbiguousFormat>(var selection))
+            if (!(modalResult is ModalOk<EAWAmbiguousFormat>(var selection))) return ProcessResult.Running;
+            
+            this.setting.SetAmbiguousCharWidthFormat(this.console, selection);
+            if (selection.IsFullWidth.HasValue)
             {
-                this.setting.SetAmbiguousCharWidthFormat(this.console, selection);
-                if (selection.IsFullWidth.HasValue)
-                {
-                    this.message =
-                        new Message(ColoredString.Concat(this.setting,
-                            ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
-                }
-                else
-                {
-                    this.message =
-                        new Message(ColoredString.Concat(this.setting,
-                            (
-                                $"East Asian Width - Ambiguous = Default (Estimated to {((this.console.ShowsAmbiguousCharAsFullWidth) ? "Full-Width" : "Half-Width")})",
-                                ColorSet.OutOfBounds
-                            )
-                        ));
-                }
+                this.message =
+                    new Message(ColoredString.Concat(this.setting,
+                        ($"East Asian Width - Ambiguous = {selection}", ColorSet.OutOfBounds)));
+            }
+            else
+            {
+                this.message =
+                    new Message(ColoredString.Concat(this.setting,
+                        (
+                            $"East Asian Width - Ambiguous = Default "
+                            + $"(Estimated to {estimatedWidth})",
+                            ColorSet.OutOfBounds
+                        )
+                    ));
             }
 
             return ProcessResult.Running;

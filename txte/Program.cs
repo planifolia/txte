@@ -3,7 +3,6 @@ using System.Linq;
 using txte;
 using txte.Settings;
 using txte.ConsoleInterface;
-using txte.TextDocument;
 using txte.TextEditor;
 using txte.Text;
 
@@ -12,18 +11,17 @@ var arguments = args.Except(options).ToArray();
 try
 {
     using var console = new CoreConsole(timeoutMillisec: 1000);
-
     var setting = new Setting();
-    var document =
-        (arguments.Length >= 1) ? await Document.OpenAsync(arguments[0], setting)
-        : new Document(setting);
-    var startingMessage =
-        new Message(ColoredString.Concat(setting,
-            ("hint: ", ColorSet.OutOfBounds),
-            ("Esc", ColorSet.KeyExpression),
-            (" to show menu", ColorSet.OutOfBounds)
-        ));
-    var editor = new Editor(console, setting, document, startingMessage);
+    var editor = new Editor(console, setting);
+    editor.ShowMessage(new Message(ColoredString.Concat(setting,
+        ("hint: ", ColorSet.OutOfBounds),
+        ("Esc", ColorSet.KeyExpression),
+        (" to show menu", ColorSet.OutOfBounds)
+    )));
+    if (arguments.Length >= 1)
+    {
+        await editor.OpenDocumentAsync(arguments[0]);
+    }
     await editor.RunAsync();
     return 0;
 }
