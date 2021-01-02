@@ -15,7 +15,7 @@ jobs:
       with:
         dotnet-version: 5.0.*
     - name: Publish to Github Packages
-      uses: Rebel028/publish-nuget@2.6.0
+      uses: Rebel028/publish-nuget@v2.6.0
       with:
         PROJECT_FILE_PATH: txte/txte.csproj
         NUGET_SOURCE: https://nuget.pkg.github.com/planifolia/index.json
