@@ -32,6 +32,7 @@ namespace txte.TextDocument
             var doc = new Document(setting)
             {
                 IsNew = false,
+                IsBlank = false,
                 Path = path,
             };
 
@@ -57,6 +58,7 @@ namespace txte.TextDocument
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
             this.IsNew = true;
+            this.IsBlank = true;
             this.Lines = new Line.List { };
             this.valuePosition = new (0, 0);
             this.offset = new (0, 0);
@@ -66,6 +68,7 @@ namespace txte.TextDocument
         public string? Path { get; set; }
         public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew { get; private set; }
+        public bool IsBlank { get; private set; }
         public Line.List Lines { get; }
         public CursorPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
         public RenderPosition RenderPosition => new (this.valuePosition.Line, this.renderPositionColumn);
@@ -103,6 +106,7 @@ namespace txte.TextDocument
         public void Save()
         {
             if (this.Path == null) return;
+            this.IsNew = false;
 
             using var file = new StreamWriter(this.Path, false, Encoding.UTF8);
             int lineCount = 0;
@@ -116,7 +120,7 @@ namespace txte.TextDocument
 
         public void InsertChar(char c)
         {
-            this.IsNew = false;
+            this.IsBlank = false;
     
             if (this.valuePosition.Line == this.Lines.Count)
             {
@@ -128,7 +132,7 @@ namespace txte.TextDocument
 
         public void InsertNewLine()
         {
-            this.IsNew = false;
+            this.IsBlank = false;
 
             if (this.valuePosition.Char == 0)
             {
@@ -158,8 +162,6 @@ namespace txte.TextDocument
 
         public void BackSpace()
         {
-            this.IsNew = false;
-
             var position = this.valuePosition;
 
             this.MoveLeft();

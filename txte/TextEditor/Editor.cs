@@ -31,7 +31,7 @@ namespace txte.TextEditor
             this.message = new Message(new ColoredString(this.setting, ""));
             this.document = new Document(this.setting);
             this.menu = new Menu(this.SetupShortcuts());
-            this.editKeyBinds = this.SetupEditKeyBinds();
+            this.editKeyBinds = this.SetupEditKeyBindings();
         }
 
         readonly IConsole console;
@@ -79,8 +79,8 @@ namespace txte.TextEditor
 
         public async Task OpenDocumentAsync(string path)
         {
-            if (!this.document.IsNew) throw
-                new NotImplementedException("Document has already opened and other document is opened");
+            if (!this.document.IsBlank) throw
+                new InvalidOperationException("Document has already opened and other document is opened");
 
             try
             {
@@ -100,6 +100,7 @@ namespace txte.TextEditor
             {
                 [new KeyBind(new KeyCombination(ConsoleKey.Q, false, true), "Quit")] =
                     this.Quit,
+
                 [new KeyBind(new KeyCombination(ConsoleKey.O, false, true), "Open")] =
                     this.Open,
                 [new KeyBind(new KeyCombination(ConsoleKey.S, false, true), "Save")] =
@@ -110,26 +111,27 @@ namespace txte.TextEditor
                     this.Close,
                 [new KeyBind(new KeyCombination(ConsoleKey.F, false, true), "Search")] =
                     this.Find,
+
+                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, true), "Move to Start of File")] =
+                    () => this.DelegateTask(this.document.MoveStartOfFile),
+                [new KeyBind(new KeyCombination(ConsoleKey.End, false, true), "Move to End of File")] =
+                    () => this.DelegateTask(this.document.MoveEndOfFile),
+
                 [new KeyBind(new KeyCombination(ConsoleKey.L, false, true), "Refresh")] =
                     () => this.DelegateTask(this.console.Clear),
-                [new KeyBind(new KeyCombination(ConsoleKey.E, true, true), "Change East Asian Width")] =
-                    this.SwitchAmbiguousWidth,
                 [new KeyBind(new KeyCombination(ConsoleKey.L, true, true), "Change End of Line sequence")] =
                     this.ChangeEndOfLine,
+                [new KeyBind(new KeyCombination(ConsoleKey.E, true, true), "Change East Asian Width")] =
+                    this.SwitchAmbiguousWidth,
             };
 
-        KeyBindSet SetupEditKeyBinds() =>
+        KeyBindSet SetupEditKeyBindings() =>
             new KeyBindSet
             {
                 [new KeyBind(new KeyCombination(ConsoleKey.Home, false, false), "Move to Start of Line")] =
                     () => this.DelegateTask(this.document.MoveHome),
                 [new KeyBind(new KeyCombination(ConsoleKey.End, false, false), "Move to End of Line")] =
                     () => this.DelegateTask(this.document.MoveEnd),
-
-                [new KeyBind(new KeyCombination(ConsoleKey.Home, true, false), "Move to Start of File")] =
-                    () => this.DelegateTask(this.document.MoveStartOfFile),
-                [new KeyBind(new KeyCombination(ConsoleKey.End, true, false), "Move to End of File")] =
-                    () => this.DelegateTask(this.document.MoveEndOfFile),
 
                 [new KeyBind(new KeyCombination(ConsoleKey.PageUp, false, false), "Scroll to Previous Page")] =
                     () => this.DelegateTask(() => this.document.MovePageUp(this.editArea.Height)),
@@ -170,11 +172,11 @@ namespace txte.TextEditor
 
         void FadeMessage(CursorPosition? cursor)
         {
-            var editAreaHeight = this.editArea.Height;
+            var beforeFading = this.editArea.Height;
             this.message.CheckExpiration(DateTime.Now);
-            if (editAreaHeight != this.editArea.Height)
+            if (this.editArea.Height != beforeFading)
             {
-                this.RefreshScreen(cursor, editAreaHeight);
+                this.RefreshScreen(cursor, beforeFading);
             }
         }
 
@@ -226,7 +228,7 @@ namespace txte.TextEditor
         void DrawMenu(IScreen screen, int line)
         {
             var keyJoiner = " + ";
-            var separator = "  ";
+            var separator = "   ";
             var titleLineCount = 2;
 
             if (line - titleLineCount >= this.menu.KeyBinds.KeyBinds.Count)
@@ -238,7 +240,7 @@ namespace txte.TextEditor
             }
             else if (line == 0)
             {
-                var message = "Shortcuts";
+                var message = "     Menu / Shortcuts";
                 var messageLength = message.Length;
                 var leftPadding = (this.console.Width - messageLength) / 2 - 1;
                 screen.AppendLine(new[]
@@ -284,7 +286,7 @@ namespace txte.TextEditor
 
         void DrawOutofBounds(IScreen screen, int line)
         {
-            if (this.document.IsNew && line == this.editArea.Height / 3)
+            if (this.document.IsBlank && line == this.editArea.Height / 3)
             {
                 var welcome = $"txte -- version {Version}";
                 var welcomeLength = welcome.Length.AtMax(this.console.Width);
@@ -316,13 +318,11 @@ namespace txte.TextEditor
         }
         void DrawSatausBar(IScreen screen)
         {
-            var fileName =
-                (this.document.Path != null ? Path.GetFileName(this.document.Path) : "")
-                + (this.document.IsNew ? "[New File]" : "");
+            var fileName = (this.document.Path != null ? Path.GetFileName(this.document.Path) : "");
             var fileNameLength = fileName.Length.AtMax(20);
             (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
-            var fileInfo = $"{clippedFileName}{(this.document.IsModified ? "(*)" : "")}";
+            var fileInfo =$"{clippedFileName}{(this.document.IsNew ? "[New File]" : "")}{(this.document.IsModified ? "(*)" : "")}";
             var positionInfo = $"{this.document.RenderPosition.Line}:{this.document.RenderPosition.Column} {this.document.NewLineFormat.Name}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
@@ -350,6 +350,7 @@ namespace txte.TextEditor
         {
             using (this.prompt.SetTemporary(prompt))
             {
+                this.document.UpdateOffset(this.editArea);
                 this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1));
                 await foreach (var (eventType, keyInfo) in this.console.ReadKeysOrTimeoutAsync())
                 {
@@ -367,10 +368,12 @@ namespace txte.TextEditor
 
                     if (state is IModalNeedsRefreash)
                     {
+                        this.document.UpdateOffset(this.editArea);
                         this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1));
                     }
                     else
                     {
+                        this.document.UpdateOffset(this.editArea);
                         this.RefreshScreen(prompt.Cursor.OffsetPrompt(this.console.Size.Height - 1), this.editArea.Height);
                     }
                 }
@@ -383,14 +386,18 @@ namespace txte.TextEditor
 
         private async Task<ProcessResult> OpenMenu()
         {
+            Func<Task<ProcessResult>>? followingCommand = null;
             using (this.menu.ShowWhileModal())
             {
                 using var message =
                     new TemporaryMessage(ColoredString.Concat(this.setting,
-                        ("hint: You can omit ", ColorSet.OutOfBounds),
+                        ("hint: Menu commands can perform on ", ColorSet.OutOfBounds),
                         ("Crtl", ColorSet.KeyExpression),
-                        (" on the menu screen", ColorSet.OutOfBounds)
+                        (" + keys or ", ColorSet.OutOfBounds),
+                        ("Esc", ColorSet.KeyExpression),
+                        (" -> keys", ColorSet.OutOfBounds)
                     ));
+
                 this.message = message;
 
                 this.RefreshScreen(null);
@@ -402,21 +409,23 @@ namespace txte.TextEditor
                         this.FadeMessage(null);
                         continue;
                     }
-                    if (keyInfo.Key == ConsoleKey.Escape) { return ProcessResult.Running; }
+
+                    if (keyInfo.Key == ConsoleKey.Escape) return ProcessResult.Running;
 
                     if (this.menu.KeyBinds[keyInfo.ToKeyCombination().WithControl()] is { } function)
                     {
-                        message.Expire();
-                        this.menu.Hide();
-                        return await function();
+                        followingCommand = function;
+                        break;
                     }
 
                     this.RefreshScreen(null);
                 }
             }
 
-            // Maybe Console is dead.
-            return ProcessResult.Quit;
+            return await (
+                followingCommand?.Invoke()
+                ?? Task.FromResult(ProcessResult.Quit) // Maybe Console is dead.
+            );
         }
 
         async Task<ProcessResult> ProcessKeyPressAsync(ConsoleKeyInfo keyInfo)
@@ -471,7 +480,7 @@ namespace txte.TextEditor
         async Task<ProcessResult> Open()
         {
             // tab mode is not supported
-            if (!this.document.IsNew) return ProcessResult.Running;
+            if (!this.document.IsBlank) return ProcessResult.Running;
 
             var promptInput = await this.Prompt(new InputPrompt("Open:", this.setting));
             if (promptInput is ModalOk<string>(var path))
