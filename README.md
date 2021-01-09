@@ -6,15 +6,22 @@
 
 ## How to use as dotnet global tool
 
+Install txte as dotnet global toosl from github with [dotnet-git-tool](https://github.com/yaegaki/dotnet-git-tool).
+
 ```sh
 # install
-dotnet tool install --global txte --add-source https://nuget.pkg.github.com/planifolia/index.json
+dotnet tool install -g dotnet-git-tool
+dotnet git-tool install github.com/planifolia/txte/txte
 
 # edit a new file
 txte
 
 # open and edit the file 
 txte path/to/text.file
+
+# uninstall
+dotnet tool uninstall -g txte
+dotnet tool uninstall -g dotnet-git-tool
 ```
 
 ## Key bindings
