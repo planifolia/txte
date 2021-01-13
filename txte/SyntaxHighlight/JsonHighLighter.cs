@@ -17,12 +17,15 @@ namespace txte.SyntaxHighlight
             ["name"] = new Keyword("\"((?:(?!(?<!\\\\)\").)*?)(?<!\\\\)\"\\s*\\:", ColorSet.SyntaxIdentifier)
             {
                 "escape-sequence",
+                "escape-sequence-unicode",
             },
             ["string"] = new Keyword("\"((?:(?!(?<!\\\\)\").)*?)(?<!\\\\)\"", ColorSet.SyntaxString)
             {
                 "escape-sequence",
+                "escape-sequence-unicode",
             },
-            ["escape-sequence"] = new Keyword("\\\\[\"\\/bfnrtu]", ColorSet.SyntaxStringKeyword),
+            ["escape-sequence"] = new Keyword("\\\\[\"\\/bfnrt]", ColorSet.SyntaxStringKeyword),
+            ["escape-sequence-unicode"] = new Keyword("\\\\u[0-9A-fa-f]{4}", ColorSet.SyntaxStringKeyword),
         })
         {
             "number",
