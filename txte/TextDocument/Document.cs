@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using txte.ConsoleInterface;
 using txte.Settings;
+using txte.SyntaxHighlight;
 using txte.Text;
 
 namespace txte.TextDocument
@@ -17,12 +18,17 @@ namespace txte.TextDocument
         RenderPosition Offset { get; set; }
     }
 
+    interface ISyntaxable
+    {
+        IHighlighter LanguageHighLighter { get; }
+    }
+
     interface IOverlapHilighter
     {
         ColoredString Highlight(Line line);
     }
 
-    class Document : IDocument
+    class Document : IDocument, ISyntaxable
     {
         public static async Task<Document> OpenAsync(string path, Setting setting)
         {
@@ -45,7 +51,7 @@ namespace txte.TextDocument
             var lines = AnyNewLinePattern.Split(text);
             foreach (var line in lines)
             {
-                doc.Lines.Add(new Line(setting, line));
+                doc.Lines.Add(new Line(doc, setting, line));
             }
 
             return doc;
@@ -55,6 +61,7 @@ namespace txte.TextDocument
 
         public Document(Setting setting)
         {
+            this.LanguageHighLighter = PlainTextHighLighter.Default;
             this.Path = null;
             this.NewLineFormat = EndOfLineFormat.FromSequence(Environment.NewLine);
             this.IsNew = true;
@@ -65,7 +72,25 @@ namespace txte.TextDocument
             this.setting = setting;
         }
 
-        public string? Path { get; set; }
+        public string? Path
+        {
+            get => this.path;
+            set
+            {
+                this.path = value;
+                var highlighter = 
+                    (value is { } availablePath) ? Highlighter.FromExtension(global::System.IO.Path.GetExtension(availablePath))
+                    : PlainTextHighLighter.Default;
+                if (this.LanguageHighLighter != highlighter)
+                {
+                    this.LanguageHighLighter = highlighter;
+                    foreach (var line in this.Lines)
+                    {
+                        line.ClearSyntacCache();
+                    }
+                }
+            }
+        }
         public EndOfLineFormat NewLineFormat { get; set; }
         public bool IsNew { get; private set; }
         public bool IsBlank { get; private set; }
@@ -75,10 +100,12 @@ namespace txte.TextDocument
         public ValuePosition ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public RenderPosition Offset { get => this.offset; set => this.offset = value; }
         public bool IsModified => this.Lines.Any(x => x.IsModified);
+        public IHighlighter LanguageHighLighter { get; set; }
         public Temporary<IOverlapHilighter> OverlapHilighter { get; } = new ();
 
         readonly Setting setting;
 
+        string? path;
         int renderPositionColumn;
         ValuePosition valuePosition;
         RenderPosition offset;
@@ -124,7 +151,7 @@ namespace txte.TextDocument
     
             if (this.valuePosition.Line == this.Lines.Count)
             {
-                this.Lines.Add(new Line(this.setting, ""));
+                this.Lines.Add(new Line(this, this.setting, ""));
             }
             this.Lines[this.valuePosition.Line].InsertChar(c, this.valuePosition.Char);
             this.MoveRight();
@@ -137,13 +164,14 @@ namespace txte.TextDocument
             if (this.valuePosition.Char == 0)
             {
                 // it condition contains that case: this.valuePosition.Line == this.Lines.Count.
-                this.Lines.Insert(this.valuePosition.Line, new Line(this.setting, "", isNewLine: true));
+                this.Lines.Insert(this.valuePosition.Line, new Line(this, this.setting, "", isNewLine: true));
             }
             else
             {
                 this.Lines.Insert(
                     this.valuePosition.Line + 1,
                     new Line(
+                        this,
                         this.setting,
                         this.Lines[this.valuePosition.Line].Value.Substring(this.valuePosition.Char),
                         isNewLine: true
@@ -151,6 +179,7 @@ namespace txte.TextDocument
                 );
                 this.Lines[this.valuePosition.Line] =
                     new Line(
+                        this,
                         this.setting,
                         this.Lines[this.valuePosition.Line].Value.Substring(0, this.valuePosition.Char),
                         isNewLine: true
@@ -182,6 +211,7 @@ namespace txte.TextDocument
                     // Delete new line of previous line
                     this.Lines[position.Line - 1] =
                         new Line(
+                            this,
                             this.setting,
                             this.Lines[position.Line - 1].Value + this.Lines[position.Line].Value,
                             isNewLine: true

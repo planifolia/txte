@@ -52,6 +52,24 @@ namespace txte.Text
         public static readonly ColorSet CurrentFound =
             new ColorSet(ConsoleColor.Black, ConsoleColor.Yellow);
 
+        public static readonly ColorSet SyntaxNumeric =
+            new ColorSet(ConsoleColor.Green, ThemeColor.Background);
+
+        public static readonly ColorSet SyntaxKeyword =
+            new ColorSet(ConsoleColor.Blue, ThemeColor.Background);
+
+        public static readonly ColorSet SyntaxIdentifier =
+            new ColorSet(ConsoleColor.Cyan, ThemeColor.Background);
+
+        public static readonly ColorSet SyntaxString =
+            new ColorSet(ConsoleColor.DarkYellow, ThemeColor.Background);
+
+        public static readonly ColorSet SyntaxStringKeyword =
+            new ColorSet(ConsoleColor.Green, ThemeColor.Background);
+
+        public static readonly ColorSet SyntaxError =
+            new ColorSet(ConsoleColor.Red, ThemeColor.Background);
+
         public static readonly ColorSet OutOfBounds =
             new ColorSet(ConsoleColor.DarkCyan, ThemeColor.Background);
         public static readonly ColorSet SystemMessage =

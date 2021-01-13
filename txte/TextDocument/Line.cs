@@ -154,15 +154,16 @@ namespace txte.TextDocument
             }
         }
 
-        public Line(Setting setting, string value) : this(setting, value, false) { }
-        public Line(Setting setting, string value, bool isNewLine)
+        public Line(ISyntaxable syntaxable, Setting setting, string value) : this(syntaxable, setting, value, false) { }
+        public Line(ISyntaxable syntaxable, Setting setting, string value, bool isNewLine)
         {
             // Index is set by Line.List
             this.Index = -1;
 
             this.setting = setting;
-            this.valueLayer = new StringLayer(value);
+            this.syntaxable = syntaxable;
             this.IsModified = isNewLine;
+            this.valueLayer = new StringLayer(value);
             this.figureLayer = new FigureStringLayer(setting, this.valueLayer);
             this.syntaxCache = null!;
         }
@@ -177,22 +178,23 @@ namespace txte.TextDocument
         {
             get
             {
-                if (this.figureLayer.IsUpdated)
+                if (this.syntaxCache is null || this.figureLayer.IsUpdated)
                 {
-                    this.syntaxCache = new ColoredString(this.setting, this.figureLayer.Value);
+                    this.syntaxCache = this.syntaxable.LanguageHighLighter.HighlightSingleLine(this.setting, this.figureLayer.Value);
                     this.figureLayer.IsUpdated = false;
                 }
-                return this.syntaxCache;
+                return this.syntaxCache!;
             }
         }
 
         public bool IsModified { get; private set; }
 
         readonly Setting setting;
+        readonly ISyntaxable syntaxable;
 
         readonly StringLayer valueLayer;
         readonly FigureStringLayer figureLayer;
-        ColoredString syntaxCache;
+        ColoredString? syntaxCache;
 
         public void InsertChar(char c, int at)
         {
@@ -214,6 +216,8 @@ namespace txte.TextDocument
             action(this.Value);
             this.IsModified = false;
         }
+
+        public void ClearSyntacCache() => this.syntaxCache = null;
 
 
         public int ValueXToRenderX(int valueX)

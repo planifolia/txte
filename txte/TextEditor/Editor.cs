@@ -12,6 +12,7 @@ using txte.Text;
 using txte.ConsoleInterface;
 using txte.TextDocument;
 using txte.Prompts;
+using txte.SyntaxHighlight;
 
 namespace txte.TextEditor
 {
@@ -88,8 +89,7 @@ namespace txte.TextEditor
             }
             catch (Exception)
             {
-                this.document = new Document(setting);
-                this.document.Path = path;
+                this.document = new Document(setting) { Path = path };
             }
         }
 
@@ -323,7 +323,7 @@ namespace txte.TextEditor
             (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
             var fileInfo =$"{clippedFileName}{(this.document.IsNew ? "[New File]" : "")}{(this.document.IsModified ? "(*)" : "")}";
-            var positionInfo = $"{this.document.RenderPosition.Line}:{this.document.RenderPosition.Column} {this.document.NewLineFormat.Name}";
+            var positionInfo = $"{this.document.RenderPosition.Line}:{this.document.RenderPosition.Column} {this.document.NewLineFormat.Name} {this.document.LanguageHighLighter.Language}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
             screen.AppendLine(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
