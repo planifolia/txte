@@ -201,26 +201,24 @@ namespace txte.TextEditor
 
         void DrawEditorLines(IScreen screen, int from)
         {
-            bool ambiguousSetting = this.setting.AmbiguousCharIsFullWidth;
             for (int line = from; line < this.editArea.Height; line++)
             {
-                var docLine = line + this.document.Offset.Line;
                 if (this.menu.IsShown)
                 {
                     this.DrawMenu(screen, line);
                 }
-                else if (docLine < this.document.Lines.Count)
+                else if (this.document.IsBlank)
                 {
-                    this.DrawDocumentLine(screen, ambiguousSetting, docLine);
+                    this.DrawWelcome(screen, line);
                 }
                 else
                 {
-                    this.DrawOutofBounds(screen, line);
+                    this.document.DrawLine(screen, line + this.document.Offset.Line);
                 }
             }
         }
 
-        void DrawDocumentLine(IScreen screen, bool ambiguousSetting, int docLine)
+        void DrawDocumentLine(IScreen screen, int docLine)
         {
             this.document.DrawLine(screen, docLine);
         }
@@ -284,29 +282,23 @@ namespace txte.TextEditor
             }
         }
 
-        void DrawOutofBounds(IScreen screen, int line)
+        void DrawWelcome(IScreen screen, int line)
         {
-            if (this.document.IsBlank && line == this.editArea.Height / 3)
+            if (line == this.editArea.Height / 3)
             {
+                var editorWidth = this.console.Width - this.document.LineNumberWidth - 1;
                 var welcome = $"txte -- version {Version}";
-                var welcomeLength = welcome.Length.AtMax(this.console.Width);
-                var padding = (this.console.Width - welcomeLength) / 2;
-                var lineBuffer = new StringBuilder();
-                if (padding > 0)
-                {
-                    lineBuffer.Append("~");
-                }
-                for (int i = 1; i < padding; i++)
-                {
-                    lineBuffer.Append(" ");
-                }
-                lineBuffer.Append(welcome.Substring(0, welcomeLength));
-
-                screen.AppendOuterLine(lineBuffer.ToString());
+                var welcomeLength = welcome.Length.AtMax(editorWidth);
+                var padding = (editorWidth - welcomeLength) / 2;
+                var displayLine = new string(' ', padding) + welcome.Substring(0, welcomeLength);
+                screen.AppendLine(new[] {
+                    new StyledString(new string(' ', this.document.LineNumberWidth) + "|", ColorSet.LineNumber),
+                    new StyledString(displayLine, ColorSet.OutOfBounds),
+                });
             }
             else
             {
-                screen.AppendOuterLine("~");
+                screen.AppendLine(new[] { new StyledString(new string(' ', this.document.LineNumberWidth) + "|", ColorSet.LineNumber) });
             }
         }
         void DrawPromptBar(IScreen screen)
@@ -323,7 +315,9 @@ namespace txte.TextEditor
             (var clippedFileName, _, _) =
                 fileName.SubRenderString(0, fileNameLength, this.setting.AmbiguousCharIsFullWidth);
             var fileInfo =$"{clippedFileName}{(this.document.IsNew ? "[New File]" : "")}{(this.document.IsModified ? "(*)" : "")}";
-            var positionInfo = $"{this.document.RenderPosition.Line}:{this.document.RenderPosition.Column} {this.document.NewLineFormat.Name} {this.document.LanguageHighLighter.Language}";
+            var positionInfo =
+                $"{this.document.RenderPosition.Line + 1}:{this.document.RenderPosition.Column + 1}"
+                + $"  {this.document.NewLineFormat.Name}  {this.document.LanguageHighLighter.Language}";
             var padding = this.console.Width - fileInfo.Length - positionInfo.Length;
 
             screen.AppendLine(new[] { new StyledString(fileInfo + new string(' ', padding) + positionInfo, ColorSet.SystemMessage) });
@@ -332,17 +326,29 @@ namespace txte.TextEditor
         {
             if (!this.message.IsValid) return;
 
+            StyledString left;
+            int displayWidth;
+            if (this.menu.IsShown)
+            {
+                left = new StyledString("~", ColorSet.OutOfBounds);
+                displayWidth = this.console.Width - 1;
+            }
+            else
+            {
+                left = new StyledString(new string(' ', this.document.LineNumberWidth) + "|", ColorSet.LineNumber);
+                displayWidth = this.console.Width - this.document.LineNumberWidth - 1;
+            }
+
             var text = this.message.Value;
             var textLength = text.GetRenderLength();
-            var displayLength = textLength.AtMax(this.console.Width);
+            var displayLength = textLength.AtMax(displayWidth);
             var render = text.SubRenderString(textLength - displayLength, displayLength);
             var prefix =
-                (displayLength < this.console.Width) ? new[]
+                new[]
                 {
-                    new StyledString("~", ColorSet.OutOfBounds),
-                    new StyledString(new string(' ', this.console.Width - displayLength - 1)),
-                }
-                : Enumerable.Empty<StyledString>();
+                    left,
+                    new StyledString(new string(' ', displayWidth - displayLength)),
+                };
             screen.AppendLine(prefix.Concat(render.ToStyledStrings()));
         }
 

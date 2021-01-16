@@ -52,6 +52,7 @@ namespace txte.TextDocument
             foreach (var line in lines)
             {
                 doc.Lines.Add(new Line(doc, setting, line));
+                doc.LineNumberWidth = doc.CalculateLineNumberWidth();
             }
 
             return doc;
@@ -70,6 +71,7 @@ namespace txte.TextDocument
             this.valuePosition = new (0, 0);
             this.offset = new (0, 0);
             this.setting = setting;
+            this.LineNumberWidth = this.CalculateLineNumberWidth();
         }
 
         public string? Path
@@ -95,7 +97,8 @@ namespace txte.TextDocument
         public bool IsNew { get; private set; }
         public bool IsBlank { get; private set; }
         public Line.List Lines { get; }
-        public CursorPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column);
+        public int LineNumberWidth { get; private set; }
+        public CursorPosition Cursor => new (this.valuePosition.Line - this.offset.Line, this.renderPositionColumn - this.offset.Column + this.LineNumberWidth + 1);
         public RenderPosition RenderPosition => new (this.valuePosition.Line, this.renderPositionColumn);
         public ValuePosition ValuePosition { get => this.valuePosition; set => this.valuePosition = value; }
         public RenderPosition Offset { get => this.offset; set => this.offset = value; }
@@ -112,21 +115,13 @@ namespace txte.TextDocument
 
         public void DrawLine(IScreen screen, int docLine)
         {
-            var render = 
-                (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Lines[docLine])
-                : this.Lines[docLine].Render;
-            var clippedLength =
-                (render.GetRenderLength() - this.offset.Column).Clamp(0, screen.Width);
-            if (clippedLength > 0)
+            if (docLine < this.Lines.Count)
             {
-                var clippedRender =
-                    render.SubRenderString(this.offset.Column, clippedLength);
-
-                screen.AppendLine(clippedRender.ToStyledStrings());
+                this.DrawContentLine(screen, docLine);
             }
             else
             {
-                screen.AppendLine("");
+                this.DrawOutofBounds(screen);
             }
         }
 
@@ -152,6 +147,7 @@ namespace txte.TextDocument
             if (this.valuePosition.Line == this.Lines.Count)
             {
                 this.Lines.Add(new Line(this, this.setting, ""));
+                this.LineNumberWidth = this.CalculateLineNumberWidth();
             }
             this.Lines[this.valuePosition.Line].InsertChar(c, this.valuePosition.Char);
             this.MoveRight();
@@ -185,6 +181,7 @@ namespace txte.TextDocument
                         isNewLine: true
                     );
             }
+            this.LineNumberWidth = this.CalculateLineNumberWidth();
             this.MoveHome();
             this.MoveDown();
         }
@@ -217,6 +214,7 @@ namespace txte.TextDocument
                             isNewLine: true
                         );
                     this.Lines.RemoveAt(position.Line);
+                    this.LineNumberWidth = this.CalculateLineNumberWidth();
                 }
             }
             else
@@ -401,9 +399,9 @@ namespace txte.TextDocument
             {
                 this.offset.Column = this.renderPositionColumn;
             }
-            if (this.renderPositionColumn >= this.offset.Column + editArea.Width)
+            if (this.renderPositionColumn >= this.offset.Column + (editArea.Width - LineNumberWidth - 1))
             {
-                this.offset.Column = this.renderPositionColumn - editArea.Width + 1 + overshoot;
+                this.offset.Column = this.renderPositionColumn - (editArea.Width - LineNumberWidth - 1) + 1 + overshoot;
             }
         }
 
@@ -411,6 +409,33 @@ namespace txte.TextDocument
         {
             this.UpdateOffset(editArea);
             return this.Cursor;
+        }
+
+        int CalculateLineNumberWidth() => ((this.Lines.Count.ToString().Length + 2) / 3) * 3;
+
+        void DrawContentLine(IScreen screen, int docLine)
+        {
+            var lineNumber = (docLine + 1).ToString().PadLeft(this.LineNumberWidth) + "|";
+            var render =
+                (this.OverlapHilighter.HasValue) ? this.OverlapHilighter.Value.Highlight(this.Lines[docLine])
+                : this.Lines[docLine].Render;
+            var clippedLength =
+                (render.GetRenderLength() - this.offset.Column).Clamp(0, screen.Width - this.LineNumberWidth - 1);
+            if (clippedLength > 0)
+            {
+                var clippedRender =
+                    render.SubRenderString(this.offset.Column, clippedLength);
+                screen.AppendLine(new[] { new StyledString(lineNumber, ColorSet.LineNumber) }.Concat(clippedRender.ToStyledStrings()));
+            }
+            else
+            {
+                screen.AppendLine(new[] { new StyledString(lineNumber, ColorSet.LineNumber) });
+            }
+        }
+         
+        void DrawOutofBounds(IScreen screen)
+        {
+            screen.AppendLine(new[] { new StyledString(new string(' ', this.LineNumberWidth) + "|", ColorSet.LineNumber) });
         }
     }
 }

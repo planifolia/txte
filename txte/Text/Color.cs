@@ -47,6 +47,9 @@ namespace txte.Text
         public static readonly ColorSet Fragment =
             new ColorSet(ConsoleColor.Blue, ThemeColor.Foreground);
 
+        public static readonly ColorSet LineNumber =
+            new ColorSet(ConsoleColor.DarkGray, ThemeColor.Background);
+
         public static readonly ColorSet Found =
             new ColorSet(ConsoleColor.Black, ConsoleColor.Gray);
         public static readonly ColorSet CurrentFound =
