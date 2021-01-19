@@ -145,7 +145,8 @@ namespace txte.TextDocument
         {
             public new Line this[int index]
             {
-                get {
+                get
+                {
                     var line = base[index];
                     line.Index = index;
                     return line;

@@ -105,16 +105,18 @@ namespace txte.TextEditor
                     this.Open,
                 [new KeyBind(new KeyCombination(ConsoleKey.S, false, true), "Save")] =
                     this.Save,
-                [new KeyBind(new KeyCombination(ConsoleKey.S, true, true), "Save As")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.S, true, true), "Save as")] =
                     this.SaveAs,
                 [new KeyBind(new KeyCombination(ConsoleKey.W, false, true), "Close")] =
                     this.Close,
                 [new KeyBind(new KeyCombination(ConsoleKey.F, false, true), "Search")] =
                     this.Find,
+                [new KeyBind(new KeyCombination(ConsoleKey.G, false, true), "Go to line")] =
+                    this.GoToLine,
 
-                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, true), "Move to Start of File")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, true), "Move to start of file")] =
                     () => this.DelegateTask(this.document.MoveStartOfFile),
-                [new KeyBind(new KeyCombination(ConsoleKey.End, false, true), "Move to End of File")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.End, false, true), "Move to end of file")] =
                     () => this.DelegateTask(this.document.MoveEndOfFile),
 
                 [new KeyBind(new KeyCombination(ConsoleKey.L, false, true), "Refresh")] =
@@ -128,39 +130,39 @@ namespace txte.TextEditor
         KeyBindSet SetupEditKeyBindings() =>
             new KeyBindSet
             {
-                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, false), "Move to Start of Line")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Home, false, false), "Move to start of line")] =
                     () => this.DelegateTask(this.document.MoveHome),
-                [new KeyBind(new KeyCombination(ConsoleKey.End, false, false), "Move to End of Line")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.End, false, false), "Move to end of line")] =
                     () => this.DelegateTask(this.document.MoveEnd),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.PageUp, false, false), "Scroll to Previous Page")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.PageUp, false, false), "Scroll to previous page")] =
                     () => this.DelegateTask(() => this.document.MovePageUp(this.editArea.Height)),
-                [new KeyBind(new KeyCombination(ConsoleKey.PageDown, false, false), "Scroll to Next Page")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.PageDown, false, false), "Scroll to next page")] =
                     () => this.DelegateTask(() => this.document.MovePageDown(this.editArea.Height)),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, true), "Move Cursor Up Quarter Page")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, true), "Move cursor up quarter page")] =
                     () => this.DelegateTask(() => this.document.MoveUp(this.editArea.Height / 4)),
-                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, true), "Move Cursor Down Quarter Page")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, true), "Move cursor down quarter page")] =
                     () => this.DelegateTask(() => this.document.MoveDown(this.editArea.Height / 4)),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, false), "Move Cursor Up")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.UpArrow, false, false), "Move cursor up")] =
                     () => this.DelegateTask(this.document.MoveUp),
-                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, false), "Move Cursor Down")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.DownArrow, false, false), "Move cursor down")] =
                     () => this.DelegateTask(this.document.MoveDown),
-                [new KeyBind(new KeyCombination(ConsoleKey.LeftArrow, false, false), "Move Cursor Left")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.LeftArrow, false, false), "Move cursor left")] =
                     () => this.DelegateTask(this.document.MoveLeft),
-                [new KeyBind(new KeyCombination(ConsoleKey.RightArrow, false, false), "Move Cursor Right")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.RightArrow, false, false), "Move cursor right")] =
                     () => this.DelegateTask(this.document.MoveRight),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.Enter, false, false), "Break Line")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Enter, false, false), "Break line")] =
                     () => this.DelegateTask(this.document.InsertNewLine),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.Backspace, false, false), "Delete a Left Letter")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Backspace, false, false), "Delete a left letter")] =
                     () => this.DelegateTask(this.document.BackSpace),
-                [new KeyBind(new KeyCombination(ConsoleKey.Delete, false, false), "Delete a Right Letter")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Delete, false, false), "Delete a right letter")] =
                     () => this.DelegateTask(this.document.DeleteChar),
 
-                [new KeyBind(new KeyCombination(ConsoleKey.Tab, false, false), "Insert Tab Letter")] =
+                [new KeyBind(new KeyCombination(ConsoleKey.Tab, false, false), "Insert tab letter")] =
                     () => this.DelegateTask(() => this.document.InsertChar('\t')),
             };
 
@@ -572,6 +574,8 @@ namespace txte.TextEditor
 
         async Task<ProcessResult> Find()
         {
+            if (this.document.IsBlank) return ProcessResult.Running;
+
             using var message =
                 new TemporaryMessage(ColoredString.Concat(this.setting,
                     ("hint: ", ColorSet.OutOfBounds),
@@ -588,6 +592,20 @@ namespace txte.TextEditor
             using (this.document.OverlapHilighter.SetTemporary(new FindingHilighter(finder)))
             {
                 await this.Prompt(new FindPrompt("Search:", finder, this.document, this.setting));
+            }
+
+            return ProcessResult.Running;
+        }
+
+        async Task<ProcessResult> GoToLine()
+        {
+            if (this.document.IsBlank) return ProcessResult.Running;
+
+            var state = new GoToLineState();
+
+            using (this.document.OverlapHilighter.SetTemporary(new GoToLineHilighter(state)))
+            {
+                await this.Prompt(new GoToLinePrompt("Go to:", state, this.document, this.setting));
             }
 
             return ProcessResult.Running;

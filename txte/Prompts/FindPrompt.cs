@@ -204,9 +204,9 @@ namespace txte.Prompts
 
             var baseResult = this.prompt.ProcessKey(keyInfo);
 
-            if (baseResult is ModalOk<string> result)
+            if (baseResult is ModalOk<string>(var result))
             {
-                return ModalOk.Create(result.Result);
+                return ModalOk.Create(result);
             }
             else if (baseResult is IModalRunning)
             {
